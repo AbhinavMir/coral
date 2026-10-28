@@ -18,18 +18,18 @@ def world():
     ch.deploy(registrar)
     prov_root, prov_sign = Account.create(), Account.create()
     pay_root, pay_sign = Account.create(), Account.create()
-    ch.register_entity("TIN:12-3456789", "provider", prov_root.address, registrar)
+    ch.register_entity("TIN:84-0398876", "provider", prov_root.address, registrar)
     ch.register_entity("PAYER:UHC", "payer", pay_root.address, registrar)
-    ch.delegate(prov_root.key, "TIN:12-3456789", prov_sign.address, NOW - DAY)
+    ch.delegate(prov_root.key, "TIN:84-0398876", prov_sign.address, NOW - DAY)
     ch.delegate(pay_root.key, "PAYER:UHC", pay_sign.address, NOW - DAY)
     return ch, registrar, prov_root, prov_sign, pay_root, pay_sign
 
 
 def rate(**kw) -> Rate:
     base = dict(
-        payerId="PAYER:UHC", planId="PLAN:UHC-CHOICE-PLUS", providerId="TIN:12-3456789", npi="1234567893",
-        code="CPT:99213", modifier_="", setting=2, formula=0, value=12_500,
-        start=NOW - 30 * DAY, end=NOW + 335 * DAY, contractVersion="C2026-01", referenceVersion="",
+        payerId="PAYER:UHC", planId="Broad Networks", providerId="TIN:84-0398876", npi="1790787307",
+        code="CPT:70450", modifier_="", setting=2, formula=0, value=114_615,
+        start=NOW - 30 * DAY, end=NOW + 335 * DAY, contractVersion="FILE-2025-11-01", referenceVersion="",
     )
     base.update(kw)
     return Rate(**base)
@@ -68,22 +68,22 @@ def test_wrong_side_key_rejected(world):
 
 def test_revocation_blocks_future_commits(world):
     ch, _, prov_root, ps, _, qs = world
-    ch.commit_rate_with_keys(rate(code="CPT:99213"), ps.key, qs.key)
-    ch.revoke(prov_root.key, "TIN:12-3456789", ps.address, NOW - 1)
+    ch.commit_rate_with_keys(rate(code="CPT:70450"), ps.key, qs.key)
+    ch.revoke(prov_root.key, "TIN:84-0398876", ps.address, NOW - 1)
     with pytest.raises(Exception):
-        ch.commit_rate_with_keys(rate(code="CPT:99214"), ps.key, qs.key)
+        ch.commit_rate_with_keys(rate(code="CPT:70460"), ps.key, qs.key)
     # the earlier record stays readable and valid
-    assert len(ch.rates_for(provider_id="TIN:12-3456789")) == 1
+    assert len(ch.rates_for(provider_id="TIN:84-0398876")) == 1
 
 
 def test_delegation_window(world):
     ch, _, prov_root, _, _, qs = world
     future = Account.create()
-    ch.delegate(prov_root.key, "TIN:12-3456789", future.address, NOW + 10 * DAY)
+    ch.delegate(prov_root.key, "TIN:84-0398876", future.address, NOW + 10 * DAY)
     with pytest.raises(Exception):
         ch.commit_rate_with_keys(rate(), future.key, qs.key)
-    assert not ch.authorized_at("TIN:12-3456789", future.address, NOW)
-    assert ch.authorized_at("TIN:12-3456789", future.address, NOW + 11 * DAY)
+    assert not ch.authorized_at("TIN:84-0398876", future.address, NOW)
+    assert ch.authorized_at("TIN:84-0398876", future.address, NOW + 11 * DAY)
 
 
 def test_root_key_cannot_sign_rates(world):
@@ -108,35 +108,35 @@ def test_signature_bound_to_deployment(world):
 def test_replace_root_after_loss(world):
     ch, registrar, _, ps, _, qs = world
     new_root = Account.create()
-    ch.replace_root("TIN:12-3456789", new_root.address, registrar)
+    ch.replace_root("TIN:84-0398876", new_root.address, registrar)
     new_signer = Account.create()
-    ch.delegate(new_root.key, "TIN:12-3456789", new_signer.address, NOW - 1)
+    ch.delegate(new_root.key, "TIN:84-0398876", new_signer.address, NOW - 1)
     ch.commit_rate_with_keys(rate(), new_signer.key, qs.key)
 
 
 def test_verify_fixed(world):
     ch, _, _, ps, _, qs = world
-    ch.commit_rate_with_keys(rate(value=12_500), ps.key, qs.key)
-    line = Line("hospital", "PAYER:UHC", "PLAN:UHC-CHOICE-PLUS", "TIN:12-3456789", "1234567893",
-                "CPT:99213", "", 2, amount_cents=12_500, percent_bp=None)
+    ch.commit_rate_with_keys(rate(value=114_615), ps.key, qs.key)
+    line = Line("hospital", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
+                "CPT:70450", "", 2, amount_cents=114_615, percent_bp=None)
     assert verify_line(ch, line, NOW).status == "match"
-    line.amount_cents = 13_000
+    line.amount_cents = 129_010
     assert verify_line(ch, line, NOW).status == "amount_differs"
-    line.code = "CPT:99215"
+    line.code = "CPT:70470"
     assert verify_line(ch, line, NOW).status == "no_record"
-    assert verify_line(ch, Line("hospital", "PAYER:UHC", "PLAN:UHC-CHOICE-PLUS", "TIN:12-3456789", "1234567893",
-                                "CPT:99213", "", 2, 12_500, None), NOW + 400 * DAY).status == "expired"
+    assert verify_line(ch, Line("hospital", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
+                                "CPT:70450", "", 2, 114_615, None), NOW + 400 * DAY).status == "expired"
 
 
 def test_verify_percent_of_charges(world):
     ch, _, _, ps, _, qs = world
-    cm = ChargemasterVersion("TIN:12-3456789", "CDM-2026-Q1", b"\x11" * 32, NOW - 60 * DAY)
+    cm = ChargemasterVersion("TIN:84-0398876", "CDM-2025-11-01", b"\x11" * 32, NOW - 60 * DAY)
     ch.commit_chargemaster(cm, ps.key)
-    ch.commit_rate_with_keys(rate(formula=1, value=4_500, referenceVersion="CDM-2026-Q1"), ps.key, qs.key)
-    line = Line("hospital", "PAYER:UHC", "PLAN:UHC-CHOICE-PLUS", "TIN:12-3456789", "1234567893",
-                "CPT:99213", "", 2, amount_cents=9_000, percent_bp=None, gross_charge_cents=20_000)
+    ch.commit_rate_with_keys(rate(formula=1, value=8_440, referenceVersion="CDM-2025-11-01"), ps.key, qs.key)
+    line = Line("hospital", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
+                "CPT:70450", "", 2, amount_cents=114_615, percent_bp=None, gross_charge_cents=135_800)
     v = verify_line(ch, line, NOW)
-    assert v.status == "match" and v.expected_cents == 9_000
+    assert v.status == "match" and v.expected_cents == 114_615
     line.gross_charge_cents = None
     assert verify_line(ch, line, NOW).status == "needs_chargemaster"
-    assert ch.chargemasters_for("TIN:12-3456789")[0]["version"] == "CDM-2026-Q1"
+    assert ch.chargemasters_for("TIN:84-0398876")[0]["version"] == "CDM-2025-11-01"

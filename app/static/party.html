@@ -31,16 +31,16 @@
   <form class="grid" id="proposeForm">
     <label>Provider <select name="providerId" id="providerSel"></select></label>
     <label>Payer <select name="payerId" id="payerSel"></select></label>
-    <label>Plan id <input name="planId" value="PLAN:UHC-CHOICE-PLUS" required></label>
-    <label>Billing NPI <input name="npi" value="1234567893" required pattern="\d{10}"></label>
-    <label>Code <input name="code" value="CPT:99213" required placeholder="CPT:99213 / MS-DRG:470"></label>
+    <label>Plan id <input name="planId" value="Broad Networks" required></label>
+    <label>Billing NPI <input name="npi" value="1790787307" required pattern="\d{10}"></label>
+    <label>Code <input name="code" value="CPT:70450" required placeholder="CPT:70450 / MS-DRG:470"></label>
     <label>Modifier <input name="modifier" placeholder="e.g. 26"></label>
     <label>Setting <select name="setting"><option>outpatient</option><option>inpatient</option><option>professional</option></select></label>
     <label>Formula <select name="formula"><option value="fixed">fixed dollar</option><option value="percent_of_charges">percent of charges</option><option value="percent_of_reference">percent of reference schedule</option></select></label>
-    <label>Value ($ or %) <input name="value" type="number" step="0.01" value="125.00" required></label>
+    <label>Value ($ or %) <input name="value" type="number" step="0.01" value="1146.15" required></label>
     <label>Start <input name="start" type="date" required></label>
     <label>End (empty = open) <input name="end" type="date"></label>
-    <label>Contract version <input name="contractVersion" value="C2026-01" required></label>
+    <label>Contract version <input name="contractVersion" value="FILE-2025-11-01" required></label>
     <label class="full">Reference version (chargemaster or fee schedule id, for percent formulas) <input name="referenceVersion"></label>
     <div class="full"><button class="primary" type="submit">Sign and propose</button> <span id="proposeMsg" class="muted"></span></div>
   </form>
@@ -49,7 +49,7 @@
 <section id="cdm">
   <p class="note">Providers sign a hash of each chargemaster version. A percent-of-charges rate names the version it applies to, so the amount recomputes from signed inputs.</p>
   <form class="grid" id="cdmForm">
-    <label>Version id <input name="version" value="CDM-2026-Q4" required></label>
+    <label>Version id <input name="version" value="CDM-2025-11-01" required></label>
     <label>Effective <input name="effective" type="date" required></label>
     <label class="full">Chargemaster file <input name="file" type="file" required></label>
     <div class="full"><button class="primary" type="submit">Hash and sign</button> <span id="cdmMsg" class="muted"></span></div>
@@ -61,7 +61,7 @@
   <p class="note">The root key is held offline and only delegates or revokes. Signing keys sign rates. Rotation delegates a new key and revokes the old one from now; earlier records stay valid.</p>
   <div id="keysInfo"></div>
   <button class="primary" id="rotateBtn">Rotate signing key</button> <span id="rotateMsg" class="muted"></span>
-  <table style="margin-top:12px"><thead><tr><th>Signing key</th><th>Not before</th><th>Not after</th><th>Revoked from</th><th>State</th></tr></thead><tbody id="keysBody"></tbody></table>
+  <table style="margin-top:12px"><thead><tr><th>Signing key (public address)</th><th>Not before</th><th>Not after</th><th>Revoked from</th><th>State</th></tr></thead><tbody id="keysBody"></tbody></table>
 </section>
 
 <section id="export">

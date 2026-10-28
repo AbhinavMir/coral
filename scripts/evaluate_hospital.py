@@ -10,7 +10,7 @@ It shows the mechanism and its cost; it is not the payer's agreement.
 Usage:
   .venv/bin/python scripts/evaluate_hospital.py data/raw/<file>.csv \
       --provider TIN:84-0398876 --npi 1790787307 --payer-name "United Healthcare" \
-      --plan-name "Broad Networks" --payer PAYER:UHC --plan PLAN:UHC-BROAD -n 200
+      --plan-name "Broad Networks" --payer PAYER:UHC --plan "Broad Networks" -n 200
 """
 import argparse
 import json

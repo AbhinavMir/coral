@@ -13,7 +13,7 @@
 
 <section id="registry" class="active">
   <p class="note">Entities CMS has registered, their root keys, and the signing keys each root has delegated. CMS binds an entity id to a root key after identity proofing; CMS never signs a rate.</p>
-  <table><thead><tr><th>Entity</th><th>Kind</th><th>Name</th><th>Root key</th><th>Signing keys</th></tr></thead><tbody id="regBody"></tbody></table>
+  <table><thead><tr><th>Entity</th><th>Kind</th><th>Name</th><th>Root key</th><th>Signing keys (public addresses)</th></tr></thead><tbody id="regBody"></tbody></table>
 </section>
 
 <section id="coverage">
@@ -25,11 +25,11 @@
 <section id="verify">
   <p class="note">Upload a hospital machine-readable file (CMS v2 tall CSV). Each negotiated line is looked up by payer, plan, NPI, code, modifier, setting and the as-of date. The result says whether the published amount equals the jointly signed amount.</p>
   <form class="grid" id="verifyForm">
-    <label>Provider entity <input name="providerId" value="TIN:12-3456789" required></label>
-    <label>Billing NPI in file <input name="npi" value="1234567893" required></label>
+    <label>Provider entity <input name="providerId" value="TIN:84-0398876" required></label>
+    <label>Billing NPI in file <input name="npi" value="1790787307" required></label>
     <label>As of <input name="asOf" type="date" required></label>
     <label>File <input name="file" type="file" required></label>
-    <label class="full">Payer/plan map (file names → ledger ids) <input name="payerMap" value='{"PAYER:UHC|PLAN:UHC-CHOICE-PLUS":["PAYER:UHC","PLAN:UHC-CHOICE-PLUS"]}' required></label>
+    <label class="full">Payer/plan map (file names → ledger ids) <input name="payerMap" value='{"United Healthcare|Broad Networks":["PAYER:UHC","Broad Networks"]}' required></label>
     <div class="full"><button class="primary" type="submit">Verify</button> <span id="verifyMsg" class="muted"></span></div>
   </form>
   <div class="cards" id="verifyCards" style="margin-top:12px"></div>

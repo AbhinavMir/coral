@@ -26,7 +26,7 @@ Who signs, with what, and how a verifier knows the key was valid.
 - Provider contracting entity: the tax identification number (TIN). Contracts are signed at the TIN. A TIN covers one or more type 2 NPIs. CMS already binds NPIs to organizations through NPPES and PECOS, and authorizes staff to act for an organization through the Identity & Access Management System (I&A).
 - Payer entity: a payer id. Candidates: the HIOS issuer id (used in Transparency in Coverage files), the NAIC company code, or the X12 payer id. The prototype uses an opaque string.
 - Registrar: CMS. CMS already receives both files and already proofs both kinds of organization. CMS binds an entity id to a root public key once, after out-of-band proofing. CMS never signs a rate.
-- The prototype names entities `TIN:84-0398876` and `PAYER:UHC`. Any string up to 32 bytes works; longer ids are hashed and the file must carry the full text.
+- Entity ids in the prototype: `TIN:84-0398876` (UCHealth Yampa Valley Medical Center, TIN from the file name, NPI 1790787307 from the file header), `PAYER:UHC`, `PAYER:AETNA` (payer names as written in the file). Any string up to 32 bytes works; longer ids are hashed and the file must carry the full text.
 
 ### Key hierarchy
 
@@ -37,7 +37,7 @@ Who signs, with what, and how a verifier knows the key was valid.
 ### What time is a signature judged against
 
 - Validity is checked at the block timestamp of the commit, which IBFT consensus sets. The signer does not choose it. A key revoked at T cannot commit at T+1, and a compromised key cannot backdate a commit to before its revocation.
-- Records committed before a revocation stay valid. Test `test_revocation_blocks_future_commits` covers this. The 200 real-line records committed under signer `0x965d…` for the demo TIN remain readable after that key was rotated.
+- Records committed before a revocation stay valid. Test `test_revocation_blocks_future_commits` covers this.
 - Consequence: the ledger's clock is the contract's clock. Effective dates inside the rate (`start`, `end`) are contract terms, signed by both parties, and are separate from the commit time.
 
 ### Signature format
@@ -71,18 +71,17 @@ Who signs, with what, and how a verifier knows the key was valid.
 - Network: Hyperledger Besu (image `hyperledger/besu:latest`, 26.10.2), IBFT 2.0, four validators in Docker, 2 s block period, zero base fee, chain id 2741. `besu/docker-compose.yml`. Fixed IPs because Besu rejects hostnames in enode URLs.
 - Client: Python, web3 7, eth-account. `coral/chain.py`, `coral/typed.py`. In-memory EVM (eth-tester) for tests.
 - Tests: 11, all pass. Cover commit, duplicate, unauthorized key, wrong-side key, revocation, delegation window, root-cannot-sign, domain binding, root replacement, verify fixed, verify percent-of-charges.
-- App: FastAPI + static HTML. `/party` for provider and payer (signed rates, pending proposals, propose, chargemaster, keys, export). `/cms` for the registrar (registry, coverage, verify an uploaded hospital file, check a claim line by record id, ledger). Keys are server-held in the prototype.
+- App: FastAPI + static HTML. Form defaults are a real line from the file: CPT 70450, outpatient, United Healthcare / Broad Networks, gross 1,358.00, negotiated 1,146.15 (percent of total billed charges, 84.4%). `/party` for provider and payer (signed rates, pending proposals, propose, chargemaster, keys, export). `/cms` for the registrar (registry, coverage, verify an uploaded hospital file, check a claim line by record id, ledger). Keys are server-held in the prototype.
 - Parsers: hospital CSV (CMS v2/v3 tall), payer TiC in-network JSON (streamed). Payer parser is written and untested on a real file.
 
 ## Results (run 2026-10-27, `results/evaluate_hospital.json`)
 
 - Input: UCHealth Yampa Valley Medical Center file, payer "United Healthcare", plan "Broad Networks". First 200 distinct (code, modifier, setting) lines with a dollar amount.
 - Parse: 0.8 s for the 141 MB file to the first 200 lines.
-- Commit: 200 records, one per block, 398 s wall, 1.99 s per record. Gas 258,922 mean per record (min and max in the JSON). Transaction input 740 bytes mean. Sequential because the client waited for each receipt; the block gas limit allows many per block.
+- Commit: 200 records, one per block, 399 s wall, 1.99 s per record. Gas 258,923 mean per record (min and max in the JSON). Transaction input 740 bytes mean. Sequential because the client waited for each receipt; the block gas limit allows many per block.
 - Verify, clean copy: 200 of 200 match. Index load 2.2 s, verification 2.2 s for 200 lines.
 - Verify, tampered copy (20 of 200 amounts altered by ±10%, +50%, or −50%): 180 match, 20 amount_differs. No false positives, no misses.
-- Verify, hand-built three-line file: one match, one amount_differs (published 32,500.00 against signed 31,250.50), one no_record.
-- Key rotation on the ledger: new key delegated, old key revoked from now; a commit with an unauthorized key reverts with `SignerNotAuthorized`; `authorizedAt(old, commitTime)` is true and `authorizedAt(old, now)` is false.
+- Key rotation on the ledger (run before the reset): new key delegated, old key revoked from now; a commit with an unauthorized key reverts with `SignerNotAuthorized`; `authorizedAt(old, commitTime)` true and `authorizedAt(old, now)` false.
 - The payer signature in the 200-record run is a prototype key, not UnitedHealthcare's agreement. The run shows mechanism and cost, not that the file is correct.
 
 ## Open items

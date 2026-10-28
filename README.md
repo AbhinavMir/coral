@@ -26,7 +26,7 @@ Paper: `abstract.tex` (AMIA format). Findings: `NOTES.md`.
 python3 -m venv .venv && .venv/bin/pip install web3 eth-account eth-tester py-evm py-solc-x ijson fastapi uvicorn python-multipart pytest
 .venv/bin/python -m pytest tests            # in-memory EVM
 cd besu && docker compose up -d && cd ..    # 4 Besu validators, RPC on :8545
-.venv/bin/python scripts/bootstrap.py       # deploy, register 4 demo entities, write build/keys.json
+.venv/bin/python scripts/bootstrap.py       # deploy, register UCHealth Yampa Valley, United Healthcare, Aetna; write build/keys.json
 .venv/bin/uvicorn app.server:app --port 8000
 ```
 
@@ -37,7 +37,7 @@ Evaluation on a real hospital file:
 ```
 .venv/bin/python scripts/evaluate_hospital.py data/raw/<hospital>_standardcharges.csv \
   --provider TIN:84-0398876 --npi 1790787307 --payer-name "United Healthcare" \
-  --plan-name "Broad Networks" --payer PAYER:UHC --plan PLAN:UHC-BROAD -n 200
+  --plan-name "Broad Networks" --payer PAYER:UHC --plan "Broad Networks" -n 200
 ```
 
 Hospital files are found through `https://<hospital domain>/cms-hpt.txt`.

@@ -22,11 +22,12 @@ from coral.chain import Chain, DEPLOY_FILE  # noqa: E402
 RELAYER_KEY = "0xae6ae8e5ccbfb04590405997ee2d52d2b330726137b875053c36d94e974d162f"
 KEYS_FILE = DEPLOY_FILE.parent / "keys.json"
 
+# Real entities from the UCHealth Yampa Valley Medical Center price file (2025-11-01):
+# TIN from the file name, type 2 NPI from the file header, payer names as written in the file.
 ENTITIES = [
     # id, kind, display name
-    ("TIN:12-3456789", "provider", "Example Health System (hospital, NPI 1234567893)"),
-    ("TIN:98-7654321", "provider", "Example Orthopedic Group (professional, NPI 1987654321)"),
-    ("PAYER:UHC", "payer", "UnitedHealthcare"),
+    ("TIN:84-0398876", "provider", "UCHealth Yampa Valley Medical Center (NPI 1790787307)"),
+    ("PAYER:UHC", "payer", "United Healthcare"),
     ("PAYER:AETNA", "payer", "Aetna"),
 ]
 
