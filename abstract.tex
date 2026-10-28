@@ -50,7 +50,7 @@
 \item Record key: payer, plan id, provider NPI, code, modifier, setting. Record value: formula type and value, start date, end date, contract version, reference fee schedule version.
 \item Record types: rate record (both sign), chargemaster version (provider signs hash), contract version (both sign), plan definition (payer signs), amendment (references the record it replaces), checkpoint (witnesses co-sign).
 \item A verifier recomputes a rate line from signed inputs only. For percent-of-charges it needs the signed chargemaster version named in the record.
-\item Hospital MRF lines and payer TiC lines cite the record id. X12 837 and 835 carry the record id in a REF segment. A claim priced against a missing, expired, or unsigned record is flagged at remittance.
+\item Provider MRF lines and payer TiC lines cite the record id. X12 837 and 835 carry the record id in a REF segment. A claim priced against a missing, expired, or unsigned record is flagged at remittance.
 \item Out of scope for the first paper: claim adjudication, synthetic claims, dispute resolution logic, revocation, witnesses, amendments. The first spec has one record type and one check: does a published line match a signed record.
 \end{itemize}
 
@@ -68,8 +68,8 @@
 \begin{itemize}
 \item Contract RateRegistry.sol (Solidity 0.8.24, 7,220 bytes): entity, delegation, revocation, rate (two signatures), chargemaster version. 11 tests pass on an in-memory EVM.
 \item Hyperledger Besu 26.10.2, IBFT 2.0, four validators in Docker, 2 s blocks, zero base fee, chain id 2741.
-\item Python client (web3 7, eth-account). FastAPI app: provider/payer view (signed rates, pending, propose, chargemaster, keys, export with record id column) and CMS view (registry, coverage, verify uploaded hospital file, check claim line by record id, ledger).
-\item Parsers for CMS hospital CSV (v2/v3 tall) and payer Transparency in Coverage JSON (streamed). Hospital parser tested on a real file; payer parser not yet.
+\item Python client (web3 7, eth-account). FastAPI app: provider/payer view (signed rates, pending, propose, chargemaster, keys, export with record id column) and CMS view (registry, coverage, verify uploaded provider file, check claim line by record id, ledger).
+\item Parsers for CMS provider CSV (v2/v3 tall) and payer Transparency in Coverage JSON (streamed). Provider parser tested on a real file; payer parser not yet.
 \end{itemize}
 
 \textbf{Results (2026-10-27)}

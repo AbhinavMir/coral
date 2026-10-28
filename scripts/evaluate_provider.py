@@ -1,4 +1,4 @@
-"""Sign real hospital MRF lines as ledger records and measure cost and verification.
+"""Sign real provider MRF lines as ledger records and measure cost and verification.
 
 Input: one CMS v2/v3 tall CSV. Picks one payer/plan, takes the first N lines with
 a dollar amount, commits each as a jointly signed rate (prototype keys for both
@@ -8,7 +8,7 @@ The payer signature here is produced by a prototype key held in build/keys.json.
 It shows the mechanism and its cost; it is not the payer's agreement.
 
 Usage:
-  .venv/bin/python scripts/evaluate_hospital.py data/raw/<file>.csv \
+  .venv/bin/python scripts/evaluate_provider.py data/raw/<file>.csv \
       --provider TIN:84-0398876 --npi 1790787307 --payer-name "United Healthcare" \
       --plan-name "Broad Networks" --payer PAYER:UHC --plan "Broad Networks" -n 200
 """
@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from coral.chain import Chain, RateIndex  # noqa: E402
-from coral.mrf import hospital_csv  # noqa: E402
+from coral.mrf import provider_csv  # noqa: E402
 from coral.typed import Rate, sign_rate  # noqa: E402
 from coral.verify import verify_line  # noqa: E402
 
@@ -40,7 +40,7 @@ def main():
     ap.add_argument("--plan", required=True)
     ap.add_argument("-n", type=int, default=200)
     ap.add_argument("--tamper", type=float, default=0.10, help="share of lines to alter in the tampered copy")
-    ap.add_argument("--out", type=Path, default=Path("results/evaluate_hospital.json"))
+    ap.add_argument("--out", type=Path, default=Path("results/evaluate_provider.json"))
     ap.add_argument("--skip-commit", action="store_true", help="records already on the ledger from an earlier run")
     args = ap.parse_args()
 
@@ -49,7 +49,7 @@ def main():
     registrar = keys["registrar"]["address"]
     now = int(time.time())
 
-    # register the real hospital TIN and the payer if the bootstrap did not
+    # register the real provider TIN and the payer if the bootstrap did not
     for eid, kind in ((args.provider, "provider"), (args.payer, "payer")):
         if ch.entity(eid) is None:
             from eth_account import Account
@@ -65,7 +65,7 @@ def main():
     t0 = time.time()
     pm = {(args.payer_name, args.plan_name): (args.payer, args.plan)}
     lines, seen = [], set()
-    for ln in hospital_csv(args.csv, args.provider, args.npi, pm):
+    for ln in provider_csv(args.csv, args.provider, args.npi, pm):
         if ln.amount_cents is None:
             continue
         k = (ln.code, ln.modifier_, ln.setting)

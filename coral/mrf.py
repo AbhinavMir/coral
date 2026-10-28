@@ -1,6 +1,6 @@
 """Parsers for public rate files.
 
-Hospital side: CMS Hospital Price Transparency machine-readable file, CSV "tall"
+Provider side: CMS Hospital Price Transparency machine-readable file, CSV "tall"
 layout, v2.x (45 CFR 180.50). Columns used: description, code|N, code|N|type,
 payer_name, plan_name, modifiers, setting, standard_charge|gross,
 standard_charge|negotiated_dollar, standard_charge|negotiated_percentage,
@@ -54,7 +54,7 @@ def _setting(s: str) -> int | None:
     return None
 
 
-def hospital_csv(path: Path, provider_id: str, npi: str, payer_map: dict[tuple[str, str], tuple[str, str]]) -> Iterator[Line]:
+def provider_csv(path: Path, provider_id: str, npi: str, payer_map: dict[tuple[str, str], tuple[str, str]]) -> Iterator[Line]:
     """Yield one Line per negotiated row of a CMS v2 tall CSV.
 
     payer_map: (payer_name, plan_name) as written in the file -> (payerId, planId)
@@ -82,15 +82,15 @@ def hospital_csv(path: Path, provider_id: str, npi: str, payer_map: dict[tuple[s
         setting = _setting(row.get("setting", ""))
         if setting is None:
             for s in (1, 2):
-                yield _hospital_line(row, provider_id, npi, payer_id, plan_id, f"{ctype}:{code}", s)
+                yield _provider_line(row, provider_id, npi, payer_id, plan_id, f"{ctype}:{code}", s)
         else:
-            yield _hospital_line(row, provider_id, npi, payer_id, plan_id, f"{ctype}:{code}", setting)
+            yield _provider_line(row, provider_id, npi, payer_id, plan_id, f"{ctype}:{code}", setting)
 
 
-def _hospital_line(row, provider_id, npi, payer_id, plan_id, code, setting) -> Line:
+def _provider_line(row, provider_id, npi, payer_id, plan_id, code, setting) -> Line:
     mods = (row.get("modifiers") or "").strip().replace(" ", "")
     return Line(
-        source="hospital", payerId=payer_id, planId=plan_id, providerId=provider_id, npi=npi,
+        source="provider", payerId=payer_id, planId=plan_id, providerId=provider_id, npi=npi,
         code=code, modifier_=mods, setting=setting,
         amount_cents=cents(row.get("standard_charge|negotiated_dollar")),
         percent_bp=bp(row.get("standard_charge|negotiated_percentage")),
@@ -129,7 +129,7 @@ def payer_json(path: Path, payer_id: str, plan_id: str, provider_map: dict[str, 
                     setting = SETTING["professional"] if bc == "professional" else None
                     if setting is None:
                         codes = set(price.get("service_code") or [])
-                        # place-of-service 21 = inpatient hospital, 22 = on-campus outpatient, 19 = off-campus outpatient
+                        # place-of-service 21 = inpatient, 22 = on-campus outpatient, 19 = off-campus outpatient
                         if codes & {"21"}:
                             setting = SETTING["inpatient"]
                         elif codes & {"22", "19", "24"}:

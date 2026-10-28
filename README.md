@@ -13,10 +13,10 @@ Paper: `abstract.tex` (AMIA format). Findings: `NOTES.md`.
 | Contract `contracts/RateRegistry.sol` | done; 11 tests pass |
 | Besu IBFT 2.0 network, 4 validators | done; `besu/docker-compose.yml` |
 | Python client, EIP-712 signing | done; `coral/` |
-| Hospital MRF parser | done; tested on one real 141 MB file |
+| Provider MRF parser | done; tested on one real 141 MB file |
 | Payer TiC parser | written; not yet run on a real file |
 | Web app: provider/payer and CMS views | done; `app/` |
-| Evaluation on real hospital lines | 200 records; `results/evaluate_hospital.json` |
+| Evaluation on real provider lines | 200 records; `results/evaluate_provider.json` |
 | Payer-side real data | not started |
 | Paper body | not started |
 
@@ -32,10 +32,10 @@ cd besu && docker compose up -d && cd ..    # 4 Besu validators, RPC on :8545
 
 Open http://127.0.0.1:8000. `/party` acts as a provider or payer. `/cms` is the registrar view.
 
-Evaluation on a real hospital file:
+Evaluation on a real provider file:
 
 ```
-.venv/bin/python scripts/evaluate_hospital.py data/raw/<hospital>_standardcharges.csv \
+.venv/bin/python scripts/evaluate_provider.py data/raw/<provider>_standardcharges.csv \
   --provider TIN:84-0398876 --npi 1790787307 --payer-name "United Healthcare" \
   --plan-name "Broad Networks" --payer PAYER:UHC --plan "Broad Networks" -n 200
 ```
@@ -49,12 +49,12 @@ contracts/RateRegistry.sol   registry: entities, delegations, revocations, rates
 coral/typed.py               EIP-712 types and signing
 coral/chain.py               ledger client (eth-tester or Besu RPC), RateIndex
 coral/verify.py              one check: does a published line match a signed record
-coral/mrf.py                 hospital CSV and payer JSON parsers
-coral/match.py               pair hospital and payer lines, agreement statistics
+coral/mrf.py                 provider CSV and payer JSON parsers
+coral/match.py               pair provider and payer lines, agreement statistics
 app/                         FastAPI server and static pages
 besu/                        genesis, validator keys, docker-compose
 scripts/bootstrap.py         deploy and register demo entities
-scripts/evaluate_hospital.py sign real lines, verify clean and tampered copies
+scripts/evaluate_provider.py sign real lines, verify clean and tampered copies
 tests/                       contract and verifier tests
 results/                     evaluation output
 ```

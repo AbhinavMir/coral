@@ -29,7 +29,7 @@ flowchart TB
     CDM -->|commitChargemaster| REG
 
     subgraph Files["Published files and claims"]
-        MRF["Hospital MRF line\n+ coral_record_id"]
+        MRF["Provider MRF line\n+ coral_record_id"]
         TIC["Payer TiC line\n+ record id"]
         X12["837 / 835\nREF segment = record id"]
     end

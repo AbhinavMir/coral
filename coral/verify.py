@@ -14,8 +14,8 @@ from .chain import Chain, RateRecord
 
 @dataclass
 class Line:
-    """One line from a hospital MRF or a payer TiC file, normalized."""
-    source: str          # "hospital" or "payer"
+    """One line from a provider MRF or a payer TiC file, normalized."""
+    source: str          # "provider" or "payer"
     payerId: str
     planId: str
     providerId: str
@@ -25,7 +25,7 @@ class Line:
     setting: int
     amount_cents: int | None      # dollar amount when the file gives one
     percent_bp: int | None        # basis points when the file gives a percentage
-    gross_charge_cents: int | None = None  # hospital file only
+    gross_charge_cents: int | None = None  # provider file only
 
 
 @dataclass

@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from coral.chain import Chain, DEPLOY_FILE
 from coral.typed import Rate, ChargemasterVersion, sign_rate, SETTING_NAME, FORMULA_NAME, FORMULA, SETTING
 from coral.verify import Line, verify_line
-from coral.mrf import hospital_csv
+from coral.mrf import provider_csv
 
 ROOT = Path(__file__).resolve().parent
 KEYS_FILE = DEPLOY_FILE.parent / "keys.json"
@@ -220,7 +220,7 @@ def rotate(entityId: str):
 
 @app.get("/api/export/mrf")
 def export_mrf(entityId: str):
-    """Hospital MRF lines (CMS v2 tall CSV subset) with a coral_record_id column."""
+    """Provider MRF lines (CMS v2 tall CSV subset) with a coral_record_id column."""
     e = _entity(entityId)
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -244,7 +244,7 @@ def export_mrf(entityId: str):
 @app.post("/api/verify")
 async def verify(providerId: str = Form(...), npi: str = Form(...), payerMap: str = Form(...),
                  asOf: str = Form(...), file: UploadFile = File(...)):
-    """Verify every negotiated line of an uploaded hospital MRF CSV against the ledger.
+    """Verify every negotiated line of an uploaded provider MRF CSV against the ledger.
 
     payerMap: JSON {"payer_name|plan_name": ["PAYER:UHC", "PLAN:..."]} mapping file names to ledger ids.
     """
@@ -255,7 +255,7 @@ async def verify(providerId: str = Form(...), npi: str = Form(...), payerMap: st
     at = int(time.mktime(time.strptime(asOf, "%Y-%m-%d")))
     rows, counts = [], {}
     try:
-        for line in hospital_csv(tmp, providerId, npi, pm):
+        for line in provider_csv(tmp, providerId, npi, pm):
             v = verify_line(chain, line, at)
             counts[v.status] = counts.get(v.status, 0) + 1
             rows.append({

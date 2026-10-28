@@ -117,14 +117,14 @@ def test_replace_root_after_loss(world):
 def test_verify_fixed(world):
     ch, _, _, ps, _, qs = world
     ch.commit_rate_with_keys(rate(value=114_615), ps.key, qs.key)
-    line = Line("hospital", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
+    line = Line("provider", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
                 "CPT:70450", "", 2, amount_cents=114_615, percent_bp=None)
     assert verify_line(ch, line, NOW).status == "match"
     line.amount_cents = 129_010
     assert verify_line(ch, line, NOW).status == "amount_differs"
     line.code = "CPT:70470"
     assert verify_line(ch, line, NOW).status == "no_record"
-    assert verify_line(ch, Line("hospital", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
+    assert verify_line(ch, Line("provider", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
                                 "CPT:70450", "", 2, 114_615, None), NOW + 400 * DAY).status == "expired"
 
 
@@ -133,7 +133,7 @@ def test_verify_percent_of_charges(world):
     cm = ChargemasterVersion("TIN:84-0398876", "CDM-2025-11-01", b"\x11" * 32, NOW - 60 * DAY)
     ch.commit_chargemaster(cm, ps.key)
     ch.commit_rate_with_keys(rate(formula=1, value=8_440, referenceVersion="CDM-2025-11-01"), ps.key, qs.key)
-    line = Line("hospital", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
+    line = Line("provider", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
                 "CPT:70450", "", 2, amount_cents=114_615, percent_bp=None, gross_charge_cents=135_800)
     v = verify_line(ch, line, NOW)
     assert v.status == "match" and v.expected_cents == 114_615

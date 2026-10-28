@@ -1,6 +1,6 @@
-"""Pair hospital lines with payer lines and measure agreement.
+"""Pair provider lines with payer lines and measure agreement.
 
-Reproduces the Trilliant Health comparison on any hospital/payer pair: share of
+Reproduces the Trilliant Health comparison on any provider/payer pair: share of
 paired lines that match exactly, fall within 10 percent, or differ by more than
 50 percent. After signing, each paired line is also checked against the ledger
 so a remaining difference is attributed to the file that departs from the
@@ -21,12 +21,12 @@ def key(ln: Line) -> tuple:
 @dataclass
 class Pair:
     key: tuple
-    hospital: Line
+    provider: Line
     payer: Line
 
     @property
     def ratio(self) -> float | None:
-        a, b = self.hospital.amount_cents, self.payer.amount_cents
+        a, b = self.provider.amount_cents, self.payer.amount_cents
         if a is None or b is None or b == 0:
             return None
         return a / b
@@ -53,19 +53,19 @@ class Stats:
         }
 
 
-def pair_lines(hospital: list[Line], payer: list[Line]) -> list[Pair]:
+def pair_lines(provider: list[Line], payer: list[Line]) -> list[Pair]:
     by_key = defaultdict(list)
     for ln in payer:
         by_key[key(ln)].append(ln)
     out = []
-    for h in hospital:
+    for h in provider:
         for p in by_key.get(key(h), []):
             out.append(Pair(key(h), h, p))
     return out
 
 
 def measure(pairs: list[Pair], verdicts: dict[tuple, tuple[Verdict, Verdict]] | None = None) -> Stats:
-    """verdicts: pair key -> (hospital verdict, payer verdict) from coral.verify, when the ledger is in use."""
+    """verdicts: pair key -> (provider verdict, payer verdict) from coral.verify, when the ledger is in use."""
     s = Stats()
     for p in pairs:
         s.pairs += 1
@@ -73,7 +73,7 @@ def measure(pairs: list[Pair], verdicts: dict[tuple, tuple[Verdict, Verdict]] | 
         if r is None:
             s.no_amount += 1
         else:
-            if p.hospital.amount_cents == p.payer.amount_cents:
+            if p.provider.amount_cents == p.payer.amount_cents:
                 s.exact += 1
             if abs(r - 1) <= 0.10:
                 s.within_10 += 1
@@ -86,7 +86,7 @@ def measure(pairs: list[Pair], verdicts: dict[tuple, tuple[Verdict, Verdict]] | 
             elif hv.status == "match":
                 s.attribution["payer_file_departs"] += 1
             elif pv.status == "match":
-                s.attribution["hospital_file_departs"] += 1
+                s.attribution["provider_file_departs"] += 1
             elif hv.status == pv.status == "no_record":
                 s.attribution["unsigned"] += 1
             else:

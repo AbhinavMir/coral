@@ -6,7 +6,7 @@
 <nav class="tabs">
   <button data-tab="registry" class="active">Registry</button>
   <button data-tab="coverage">Coverage</button>
-  <button data-tab="verify">Verify a hospital file</button>
+  <button data-tab="verify">Verify a provider file</button>
   <button data-tab="claim">Check a claim line</button>
   <button data-tab="ledger">Ledger</button>
 </nav>
@@ -23,7 +23,7 @@
 </section>
 
 <section id="verify">
-  <p class="note">Upload a hospital machine-readable file (CMS v2 tall CSV). Each negotiated line is looked up by payer, plan, NPI, code, modifier, setting and the as-of date. The result says whether the published amount equals the jointly signed amount.</p>
+  <p class="note">Upload a provider machine-readable file (CMS v2 tall CSV). Each negotiated line is looked up by payer, plan, NPI, code, modifier, setting and the as-of date. The result says whether the published amount equals the jointly signed amount.</p>
   <form class="grid" id="verifyForm">
     <label>Provider entity <input name="providerId" value="TIN:84-0398876" required></label>
     <label>Billing NPI in file <input name="npi" value="1790787307" required></label>

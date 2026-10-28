@@ -8,7 +8,7 @@ unless a source is named.
 - Hospitals publish negotiated rates under 45 CFR 180 (Hospital Price Transparency). Payers publish in-network rates under the Transparency in Coverage rule (85 FR 72158). Each file is produced by one party. No file carries the other party's signature.
 - Trilliant Health, 30 April 2026: 450 hospitals, Aetna and UnitedHealthcare, 16 codes, data from August 2025. Exact match 9.0% inpatient, 10.8% GI, 11.7% orthopedic. Within 10%: 50.8%, 41.7%, 47.4%. More than 50% apart: 17.9% for inpatient and GI.
 - The comparison cannot say which file is correct. Neither file links a line to a contract version, an effective date, or the other party.
-- Rates are formulas: fixed amount, percent of billed charges, or percent of a reference fee schedule. In the one real hospital file profiled (UCHealth Yampa Valley Medical Center, file dated 2025-11-01, CMS format 3.0.0): 633,324 rows, 454,793 with a dollar amount, 228,164 (36%) percent of total billed charges, 30 payer/plan pairs, one type 2 NPI in the header (1790787307). A percent-of-charges line changes value when the chargemaster changes. The payer does not sign the chargemaster.
+- Rates are formulas: fixed amount, percent of billed charges, or percent of a reference fee schedule. In the one real provider file profiled (UCHealth Yampa Valley Medical Center, file dated 2025-11-01, CMS format 3.0.0): 633,324 rows, 454,793 with a dollar amount, 228,164 (36%) percent of total billed charges, 30 payer/plan pairs, one type 2 NPI in the header (1790787307). A percent-of-charges line changes value when the chargemaster changes. The payer does not sign the chargemaster.
 
 ## Prior art
 
@@ -62,7 +62,7 @@ Who signs, with what, and how a verifier knows the key was valid.
 - Record key: payer, plan id, provider TIN, NPI, code, modifier, setting. Record value: formula type and value, start, end, contract version, reference version.
 - Record types implemented: Entity (registrar), Delegation, Revocation, Rate (both sign), ChargemasterVersion (provider signs a SHA-256 of the file). Amendment, witness checkpoint, and on-ledger proposal are deferred.
 - Verifier: recomputes the amount from signed inputs only. Fixed: the value. Percent of charges: value × gross charge from the chargemaster version named in the record. Percent of reference: value × reference amount from the named schedule version.
-- Hospital MRF lines carry a `coral_record_id` column. X12 837 and 835 carry it in a REF segment. A claim line priced against a missing, expired, or unsigned record is flagged at remittance.
+- Provider MRF lines carry a `coral_record_id` column. X12 837 and 835 carry it in a REF segment. A claim line priced against a missing, expired, or unsigned record is flagged at remittance.
 - First-paper scope: one check. Does a published line match a jointly signed record that covers its date.
 
 ## Build
@@ -71,10 +71,10 @@ Who signs, with what, and how a verifier knows the key was valid.
 - Network: Hyperledger Besu (image `hyperledger/besu:latest`, 26.10.2), IBFT 2.0, four validators in Docker, 2 s block period, zero base fee, chain id 2741. `besu/docker-compose.yml`. Fixed IPs because Besu rejects hostnames in enode URLs.
 - Client: Python, web3 7, eth-account. `coral/chain.py`, `coral/typed.py`. In-memory EVM (eth-tester) for tests.
 - Tests: 11, all pass. Cover commit, duplicate, unauthorized key, wrong-side key, revocation, delegation window, root-cannot-sign, domain binding, root replacement, verify fixed, verify percent-of-charges.
-- App: FastAPI + static HTML. Form defaults are a real line from the file: CPT 70450, outpatient, United Healthcare / Broad Networks, gross 1,358.00, negotiated 1,146.15 (percent of total billed charges, 84.4%). `/party` for provider and payer (signed rates, pending proposals, propose, chargemaster, keys, export). `/cms` for the registrar (registry, coverage, verify an uploaded hospital file, check a claim line by record id, ledger). Keys are server-held in the prototype.
-- Parsers: hospital CSV (CMS v2/v3 tall), payer TiC in-network JSON (streamed). Payer parser is written and untested on a real file.
+- App: FastAPI + static HTML. Form defaults are a real line from the file: CPT 70450, outpatient, United Healthcare / Broad Networks, gross 1,358.00, negotiated 1,146.15 (percent of total billed charges, 84.4%). `/party` for provider and payer (signed rates, pending proposals, propose, chargemaster, keys, export). `/cms` for the registrar (registry, coverage, verify an uploaded provider file, check a claim line by record id, ledger). Keys are server-held in the prototype.
+- Parsers: provider CSV (CMS v2/v3 tall), payer TiC in-network JSON (streamed). Payer parser is written and untested on a real file.
 
-## Results (run 2026-10-27, `results/evaluate_hospital.json`)
+## Results (run 2026-10-27, `results/evaluate_provider.json`)
 
 - Input: UCHealth Yampa Valley Medical Center file, payer "United Healthcare", plan "Broad Networks". First 200 distinct (code, modifier, setting) lines with a dollar amount.
 - Parse: 0.8 s for the 141 MB file to the first 200 lines.
@@ -86,7 +86,7 @@ Who signs, with what, and how a verifier knows the key was valid.
 
 ## Open items
 
-- Payer side on real data: fetch one Transparency in Coverage in-network file for the same hospital (UHC publishes an index at transparency-in-coverage.uhc.com) and run `coral/mrf.py:payer_json`. Files are large; the parser streams.
+- Payer side on real data: fetch one Transparency in Coverage in-network file for the same provider (UHC publishes an index at transparency-in-coverage.uhc.com) and run `coral/mrf.py:payer_json`. Files are large; the parser streams.
 - Evaluation on the Trilliant pairing (450 hospitals) needs hospital files found through each hospital's `cms-hpt.txt` and two payer indexes. Of ten hospitals tried on 2026-10-27, four served a `cms-hpt.txt` (NYP, UCHealth, OHSU, Houston Methodist); the rest returned HTML or a block page.
 - Batching commits: N transactions per block, measure records per second.
 - On-ledger proposal record (who proposed, who did not sign). Deferred.
