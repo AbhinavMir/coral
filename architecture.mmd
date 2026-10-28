@@ -1,0 +1,50 @@
+flowchart TB
+    subgraph Keys["Keys and identity"]
+        CMS["CMS (registrar)\nbinds TIN / payer id to root key"]
+        PR["Provider root key\noffline, delegates and revokes only"]
+        QR["Payer root key\noffline, delegates and revokes only"]
+        PS["Provider signing key\nin contract-management system"]
+        QS["Payer signing key\nin contract-management system"]
+        CMS -->|registerEntity| PR
+        CMS -->|registerEntity| QR
+        PR -->|delegate / revoke| PS
+        QR -->|delegate / revoke| QS
+    end
+
+    subgraph Record["Rate record (EIP-712)"]
+        R["payer, plan, TIN, NPI, code, modifier, setting\nformula, value, start, end\ncontract version, reference version"]
+    end
+
+    PS -->|signature 1| R
+    QS -->|signature 2| R
+    PS -->|signs file hash| CDM["Chargemaster version\nSHA-256, effective date"]
+
+    subgraph Ledger["Besu, IBFT 2.0, permissioned"]
+        direction LR
+        V1["CMS node"] --- V2["Provider assoc. node"] --- V3["Payer assoc. node"] --- V4["Auditor node"]
+        REG["RateRegistry contract\ncheck both keys delegated at block time\nstore record, id = hash"]
+    end
+
+    R -->|commitRate, any relayer| REG
+    CDM -->|commitChargemaster| REG
+
+    subgraph Files["Published files and claims"]
+        MRF["Hospital MRF line\n+ coral_record_id"]
+        TIC["Payer TiC line\n+ record id"]
+        X12["837 / 835\nREF segment = record id"]
+    end
+
+    REG -.->|record id| MRF
+    REG -.->|record id| TIC
+    REG -.->|record id| X12
+
+    subgraph Verify["Verifier (anyone with the file)"]
+        VQ{"published amount ==\nsigned amount for this key\non this date?"}
+        OUT["match / amount differs /\nno record / expired"]
+        VQ --> OUT
+    end
+
+    MRF --> VQ
+    TIC --> VQ
+    X12 --> VQ
+    REG -->|read| VQ
