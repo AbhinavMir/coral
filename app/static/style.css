@@ -5,13 +5,14 @@ header { display:flex; gap:16px; align-items:center; padding:10px 16px; border-b
 header h1 { font-size:16px; margin:0; }
 header a { color:var(--fg); }
 header .status { margin-left:auto; color:var(--muted); font-size:12px; }
-main { padding:16px; max-width:1200px; }
+main { padding:16px 24px; }
 nav.tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:12px; }
 nav.tabs button { background:none; border:none; padding:8px 12px; cursor:pointer; font:inherit; border-bottom:2px solid transparent; }
 nav.tabs button.active { border-bottom-color:var(--fg); font-weight:600; }
 section { display:none; } section.active { display:block; }
 table { border-collapse:collapse; width:100%; font-size:13px; }
-th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; white-space:nowrap; }
+td.wrap { white-space:normal; }
 th { background:var(--soft); font-weight:600; }
 td.mono, .mono { font-family:ui-monospace, monospace; font-size:12px; }
 form.grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px 12px; max-width:900px; }
