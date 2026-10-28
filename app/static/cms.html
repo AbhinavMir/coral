@@ -1,0 +1,80 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>CORAL · CMS</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+<header><h1><a href="/">CORAL</a></h1><span class="muted">CMS · registrar and auditor</span><span class="status" id="status"></span></header>
+<main>
+<nav class="tabs">
+  <button data-tab="registry" class="active">Registry</button>
+  <button data-tab="coverage">Coverage</button>
+  <button data-tab="verify">Verify a hospital file</button>
+  <button data-tab="claim">Check a claim line</button>
+  <button data-tab="ledger">Ledger</button>
+</nav>
+
+<section id="registry" class="active">
+  <p class="note">Entities CMS has registered, their root keys, and the signing keys each root has delegated. CMS binds an entity id to a root key after identity proofing; CMS never signs a rate.</p>
+  <table><thead><tr><th>Entity</th><th>Kind</th><th>Name</th><th>Root key</th><th>Signing keys</th></tr></thead><tbody id="regBody"></tbody></table>
+</section>
+
+<section id="coverage">
+  <div class="cards" id="cards"></div>
+  <p class="note">Per provider-payer pair: signed records on the ledger and how many are live today.</p>
+  <table><thead><tr><th>Provider</th><th>Payer</th><th>Plans</th><th>Codes</th><th>Records</th><th>Live</th></tr></thead><tbody id="covBody"></tbody></table>
+</section>
+
+<section id="verify">
+  <p class="note">Upload a hospital machine-readable file (CMS v2 tall CSV). Each negotiated line is looked up by payer, plan, NPI, code, modifier, setting and the as-of date. The result says whether the published amount equals the jointly signed amount.</p>
+  <form class="grid" id="verifyForm">
+    <label>Provider entity <input name="providerId" value="TIN:12-3456789" required></label>
+    <label>Billing NPI in file <input name="npi" value="1234567893" required></label>
+    <label>As of <input name="asOf" type="date" required></label>
+    <label>File <input name="file" type="file" required></label>
+    <label class="full">Payer/plan map (file names → ledger ids) <input name="payerMap" value='{"PAYER:UHC|PLAN:UHC-CHOICE-PLUS":["PAYER:UHC","PLAN:UHC-CHOICE-PLUS"]}' required></label>
+    <div class="full"><button class="primary" type="submit">Verify</button> <span id="verifyMsg" class="muted"></span></div>
+  </form>
+  <div class="cards" id="verifyCards" style="margin-top:12px"></div>
+  <table><thead><tr><th>Payer</th><th>Plan</th><th>Code</th><th>Mod</th><th>Setting</th><th>Published</th><th>Signed</th><th>Status</th><th>Record</th></tr></thead><tbody id="verifyBody"></tbody></table>
+</section>
+
+<section id="claim">
+  <p class="note">An 837 or 835 carries the record id in a REF segment. Enter the id and the paid amount to check that the line was priced against a live, jointly signed rate.</p>
+  <form class="grid" id="claimForm">
+    <label class="full">Record id <input name="rateId" required placeholder="0x…"></label>
+    <label>Amount ($) <input name="amount" type="number" step="0.01"></label>
+    <div class="full"><button class="primary" type="submit">Check</button></div>
+  </form>
+  <pre id="claimOut"></pre>
+</section>
+
+<section id="ledger">
+  <p class="note">Latest blocks from the CMS node. Block time comes from IBFT consensus and is what key validity is judged against.</p>
+  <table><thead><tr><th>Block</th><th>Time</th><th>Txs</th><th>Hash</th></tr></thead><tbody id="ledgerBody"></tbody></table>
+</section>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const fmtT=t=>new Date(t*1000).toISOString().replace('T',' ').slice(0,19);
+const api=async(p,o)=>{const r=await fetch(p,o);const j=await r.json();if(!r.ok)throw new Error(j.detail||r.statusText);return j;};
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('active'));document.querySelectorAll('section').forEach(x=>x.classList.remove('active'));b.classList.add('active');$('#'+b.dataset.tab).classList.add('active');});
+const money=c=>c==null?'—':'$'+(c/100).toFixed(2);
+async function init(){
+  const s=await api('/api/status'); $('#status').textContent=`chain ${s.chainId} · block ${s.block} · ${s.peers} peers · registrar ${s.registrar.slice(0,10)}…`;
+  const ents=await api('/api/entities'); const now=Date.now()/1000;
+  $('#regBody').innerHTML=ents.map(e=>`<tr><td>${e.id}</td><td>${e.kind}</td><td>${e.name}</td><td class="mono">${e.root}</td><td class="mono">${e.signers.map(k=>{const live=now>=k.notBefore&&(!k.notAfter||now<k.notAfter)&&(!k.revokedFrom||now<k.revokedFrom);return `${k.signer} <span class="${live?'ok':'bad'}">${live?'active':'revoked '+fmtT(k.revokedFrom)}</span>`}).join('<br>')}</td></tr>`).join('');
+  const cov=await api('/api/coverage');
+  const tot=cov.reduce((a,p)=>a+p.records,0), live=cov.reduce((a,p)=>a+p.live,0);
+  $('#cards').innerHTML=`<div class="card"><div class="n">${ents.filter(e=>e.kind==='provider').length}</div><div class="l">providers</div></div><div class="card"><div class="n">${ents.filter(e=>e.kind==='payer').length}</div><div class="l">payers</div></div><div class="card"><div class="n">${cov.length}</div><div class="l">pairs with signed rates</div></div><div class="card"><div class="n">${tot}</div><div class="l">signed records</div></div><div class="card"><div class="n">${live}</div><div class="l">live today</div></div>`;
+  $('#covBody').innerHTML=cov.map(p=>`<tr><td>${p.providerId}</td><td>${p.payerId}</td><td>${p.plans.join(', ')}</td><td>${p.codes}</td><td>${p.records}</td><td>${p.live}</td></tr>`).join('')||'<tr><td colspan=6 class=muted>no signed rates yet</td></tr>';
+  const blocks=await api('/api/ledger?n=15');
+  $('#ledgerBody').innerHTML=blocks.map(b=>`<tr><td>${b.number}</td><td>${fmtT(b.timestamp)}</td><td>${b.txs}</td><td class="mono">${b.hash.slice(0,20)}…</td></tr>`).join('');
+  $('#verifyForm').asOf.value=new Date().toISOString().slice(0,10);
+}
+$('#verifyForm').onsubmit=async ev=>{ev.preventDefault();$('#verifyMsg').textContent='verifying…';try{const r=await api('/api/verify',{method:'POST',body:new FormData(ev.target)});
+  $('#verifyMsg').textContent=`${r.lines} negotiated lines checked`;
+  $('#verifyCards').innerHTML=Object.entries(r.counts).map(([k,v])=>`<div class="card"><div class="n">${v}</div><div class="l">${k.replaceAll('_',' ')}</div></div>`).join('');
+  $('#verifyBody').innerHTML=r.rows.map(x=>`<tr><td>${x.payerId}</td><td>${x.planId}</td><td>${x.code}</td><td>${x.modifier}</td><td>${x.setting}</td><td>${money(x.published)}</td><td>${money(x.expected)}</td><td class="${x.status==='match'?'ok':'bad'}">${x.status.replaceAll('_',' ')}</td><td class="mono">${x.recordId?x.recordId.slice(0,12)+'…':'—'}</td></tr>`).join('');
+}catch(e){$('#verifyMsg').textContent=e.message;}};
+$('#claimForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);const q=new URLSearchParams({rateId:f.get('rateId')});if(f.get('amount'))q.set('amount',f.get('amount'));try{$('#claimOut').textContent=JSON.stringify(await api('/api/verify/record?'+q),null,2);}catch(e){$('#claimOut').textContent=e.message;}};
+init();
+</script>
+</body></html>

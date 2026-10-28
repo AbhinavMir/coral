@@ -1,0 +1,67 @@
+# CORAL dev network: 4 Besu validators, IBFT 2.0, free gas, chain id 2741.
+# Keys and genesis come from `operator generate-blockchain-config` (see README).
+# Node roles in the paper: CMS (registrar), provider association, payer association, auditor.
+x-besu: &besu
+  image: hyperledger/besu:latest
+  restart: unless-stopped
+  environment:
+    BESU_GENESIS_FILE: /config/genesis.json
+    BESU_MIN_GAS_PRICE: "0"
+    BESU_RPC_HTTP_ENABLED: "true"
+    BESU_RPC_HTTP_HOST: 0.0.0.0
+    BESU_RPC_HTTP_API: ETH,NET,WEB3,IBFT,TXPOOL
+    BESU_HOST_ALLOWLIST: "*"
+    BESU_RPC_HTTP_CORS_ORIGINS: "all"
+    BESU_P2P_HOST: 0.0.0.0
+    BESU_BOOTNODES: enode://21e88d703fdec57c3370b68e491591066a0513028df9784fb852ed0a47f1144e29af376b8f3975b03ad48bbba47370656b777ab08078dad6c31d9fb3cb259dce@172.28.0.10:30303
+    BESU_DATA_PATH: /data
+    BESU_NODE_PRIVATE_KEY_FILE: /keys/key
+    BESU_LOGGING: WARN
+    BESU_PROFILE: ENTERPRISE
+
+services:
+  cms:
+    <<: *besu
+    container_name: coral-cms
+    networks: {coral: {ipv4_address: 172.28.0.10}}
+    volumes:
+      - ./network/genesis.json:/config/genesis.json:ro
+      - ./network/keys/0x17e4d67ab485eaf2129faebdb0f8982894d4404b:/keys:ro
+      - ./data/cms:/data
+    ports: ["8545:8545"]
+  providers:
+    <<: *besu
+    container_name: coral-providers
+    networks: {coral: {ipv4_address: 172.28.0.11}}
+    volumes:
+      - ./network/genesis.json:/config/genesis.json:ro
+      - ./network/keys/0x3d3f94a03c504903ad516263557640ebaf0e7118:/keys:ro
+      - ./data/providers:/data
+    ports: ["8546:8545"]
+    depends_on: [cms]
+  payers:
+    <<: *besu
+    container_name: coral-payers
+    networks: {coral: {ipv4_address: 172.28.0.12}}
+    volumes:
+      - ./network/genesis.json:/config/genesis.json:ro
+      - ./network/keys/0x728296d0da878a9f579be4f557401469cb8bd7d6:/keys:ro
+      - ./data/payers:/data
+    ports: ["8547:8545"]
+    depends_on: [cms]
+  auditor:
+    <<: *besu
+    container_name: coral-auditor
+    networks: {coral: {ipv4_address: 172.28.0.13}}
+    volumes:
+      - ./network/genesis.json:/config/genesis.json:ro
+      - ./network/keys/0x9bf1cfa8244cf0cb65bdd23bd0b4442aedf7250e:/keys:ro
+      - ./data/auditor:/data
+    ports: ["8548:8545"]
+    depends_on: [cms]
+
+networks:
+  coral:
+    driver: bridge
+    ipam:
+      config: [{subnet: 172.28.0.0/24}]

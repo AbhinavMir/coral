@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>CORAL</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+<header><h1>CORAL</h1><span class="muted">Committed Ratesheet on Ledger</span><span class="status" id="status"></span></header>
+<main>
+<p>Choose a view.</p>
+<ul>
+  <li><a href="/party">Provider / payer</a>: propose a rate, countersign, sign a chargemaster version, rotate signing keys, export a machine-readable file with record ids.</li>
+  <li><a href="/cms">CMS</a>: registry of entities and keys, verify an uploaded hospital file against the ledger, check a claim line by record id, coverage by provider-payer pair.</li>
+</ul>
+<p class="note">Prototype. Signing keys are held by this server and selected by the entity you choose. A deployment keeps keys inside each entity's own systems.</p>
+</main>
+<script>
+fetch('/api/status').then(r=>r.json()).then(s=>{document.getElementById('status').textContent=`chain ${s.chainId} · block ${s.block} · ${s.peers} peers · registry ${s.contract.slice(0,10)}…`});
+</script>
+</body></html>

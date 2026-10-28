@@ -1,0 +1,95 @@
+% AMIA Annual Symposium format: US Letter, one column, Times, 1-inch margins,
+% title and authors bold centered, abstract italic justified (125-150 words for
+% Paper - Regular), bold left section headings, Vancouver references.
+\documentclass[10pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{times}
+\usepackage[letterpaper,margin=1in]{geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+
+\titleformat{\section}{\normalsize\bfseries}{}{0em}{}
+\titlespacing*{\section}{0pt}{1em}{0.2em}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5em}
+
+\begin{document}
+
+\begin{center}
+{\large\bfseries A Private Blockchain for Jointly Signed Negotiated Rates Between Providers and Payers}\\[4pt]
+{\bfseries Abhinav Srivastava\textsuperscript{1}}\\[2pt]
+{\bfseries \textsuperscript{1}Independent Researcher; abhinavmirdev@gmail.com}
+\end{center}
+
+\section*{Abstract}
+\textit{Providers and payers each publish their negotiated rates. A 2026 comparison of 450 hospitals and two payers found about one in ten paired rates match exactly and about half fall within 10 percent. Each file is published by one party without the other's confirmation. CORAL is a permissioned ledger on which a provider and a payer jointly sign each negotiated rate with its plan, code, modifier, setting, formula, dates, and contract version. Providers sign chargemaster versions, so percentage rates recompute from signed inputs. Machine-readable files and X12 837 and 835 reference segments cite the record identifier, so a claim priced against a missing or expired rate is detected at remittance. We implement CORAL on Hyperledger Besu and evaluate it on public provider and payer files, reporting disagreement before and after signing, the party responsible for each remaining difference, and cost per contract.}
+
+\section*{Working notes (remove before submission)}
+
+\textbf{Problem}
+\begin{itemize}
+\item Hospitals publish negotiated rates under the CMS Hospital Price Transparency rule (45 CFR 180). Payers publish in-network rates under the Transparency in Coverage rule. Each file is produced by one party. No file carries the other party's signature.
+\item Trilliant Health, 30 April 2026: 450 hospitals, Aetna and UnitedHealthcare, 16 codes, data from August 2025. Exact match: 9.0\% inpatient, 10.8\% GI, 11.7\% orthopedic. Within 10\%: 50.8\%, 41.7\%, 47.4\%. More than 50\% apart: 17.9\% for inpatient and GI.
+\item The comparison cannot say which file is correct. Neither file links a published line to a contract version or an effective date.
+\item Rates are formulas, not constants: fixed amount, percent of charges, or percent of a reference fee schedule. A percent-of-charges rate changes when the chargemaster changes. The chargemaster is per provider and versioned. The payer does not sign it.
+\end{itemize}
+
+\textbf{Prior art}
+\begin{itemize}
+\item No paper or product found on jointly signed negotiated rates or on a ledger that holds rate records (six searches, 27 October 2026).
+\item Status-on-chain claim networks exist: Change Healthcare Hyperledger Fabric claims network (2018), Avaneer Health, Synaptic Health Alliance (provider directory). MediLedger 340B working group (2021). None holds the rate itself with both signatures.
+\item Transparency logs (Certificate Transparency, Trillian, SCITT) give append-only with one operator. A ledger is justified only when the parties distrust each other and no neutral operator is accepted; cite the three-condition test from the blockchain-health position paper. Equivocation detection: PeerReview (SOSP 2007), SUNDR fork consistency. arXiv 2308.04781: an append on a chain is not proof that the counterparty received it.
+\item FHIR Provenance, W3C PROV, C2PA, HL7 AI Transparency on FHIR cover record provenance, not contract terms.
+\end{itemize}
+
+\textbf{Design}
+\begin{itemize}
+\item Record key: payer, plan id, provider NPI, code, modifier, setting. Record value: formula type and value, start date, end date, contract version, reference fee schedule version.
+\item Record types: rate record (both sign), chargemaster version (provider signs hash), contract version (both sign), plan definition (payer signs), amendment (references the record it replaces), checkpoint (witnesses co-sign).
+\item A verifier recomputes a rate line from signed inputs only. For percent-of-charges it needs the signed chargemaster version named in the record.
+\item Hospital MRF lines and payer TiC lines cite the record id. X12 837 and 835 carry the record id in a REF segment. A claim priced against a missing, expired, or unsigned record is flagged at remittance.
+\item Out of scope for the first paper: claim adjudication, synthetic claims, dispute resolution logic, revocation, witnesses, amendments. The first spec has one record type and one check: does a published line match a signed record.
+\end{itemize}
+
+\textbf{Keys}
+\begin{itemize}
+\item Identity roots: provider = TIN (contracts are signed at the TIN; a TIN covers one or more type 2 NPIs); payer = HIOS issuer id, NAIC code, or X12 payer id. Registrar = CMS, which already proofs both through PECOS, I\&A, and CCIIO. CMS binds an entity to a root key once and never signs a rate.
+\item Root key: offline, signs only delegations and revocations. The contract rejects a root key as a rate signer because it has no delegation. Signing keys are delegated for a window and live in the system that produces the rate sheet. Rotation = delegate new, revoke old from now.
+\item Validity is judged at the block timestamp of the commit, set by IBFT consensus, not by the signer. Records committed before a revocation stay valid; a compromised key cannot backdate. Contract effective dates are signed terms, separate from commit time.
+\item EIP-712 typed signatures over the same struct hash from both parties; the hash is the record id. Domain binds chain id and contract address (replay across deployments rejected in test). Relayer has no authority.
+\item First signature is held off ledger until the second exists; a proposal never countersigned leaves no trace. On-ledger proposals (who refused) deferred.
+\item Root loss: CMS replaces the root after re-proofing. Registrar key loss: validator governance, out of scope. Validator node keys are separate from signing keys; validators stand for CMS, a provider association, a payer association, an auditor.
+\end{itemize}
+
+\textbf{Build (done 2026-10-27)}
+\begin{itemize}
+\item Contract RateRegistry.sol (Solidity 0.8.24, 7,220 bytes): entity, delegation, revocation, rate (two signatures), chargemaster version. 11 tests pass on an in-memory EVM.
+\item Hyperledger Besu 26.10.2, IBFT 2.0, four validators in Docker, 2 s blocks, zero base fee, chain id 2741.
+\item Python client (web3 7, eth-account). FastAPI app: provider/payer view (signed rates, pending, propose, chargemaster, keys, export with record id column) and CMS view (registry, coverage, verify uploaded hospital file, check claim line by record id, ledger).
+\item Parsers for CMS hospital CSV (v2/v3 tall) and payer Transparency in Coverage JSON (streamed). Hospital parser tested on a real file; payer parser not yet.
+\end{itemize}
+
+\textbf{Results (2026-10-27)}
+\begin{itemize}
+\item Real file: UCHealth Yampa Valley Medical Center, 2025-11-01, format 3.0.0, 141 MB, 633,324 rows, 454,793 with a dollar amount, 228,164 (36\%) percent of billed charges, 30 payer/plan pairs, NPI 1790787307.
+\item Signed the first 200 distinct dollar lines for United Healthcare / Broad Networks as ledger records (payer signature by a prototype key, not UHC's agreement). Gas 258,922 mean per record; 740-byte transaction input; 1.99 s per record when committed one per block.
+\item Verification: clean copy 200/200 match; index load 2.2 s, 200 lines verified in 2.2 s. Tampered copy with 20 altered amounts: 180 match, 20 amount\_differs, no false positives.
+\item Key rotation on the live ledger: old key rejected after revocation, earlier records still valid.
+\item Of ten hospital sites tried, four served the CMS-required cms-hpt.txt locator (NYP, UCHealth, OHSU, Houston Methodist).
+\end{itemize}
+
+\textbf{Open}
+\begin{itemize}
+\item Payer side on real data (UHC TiC index), the Trilliant 450-hospital pairing, batched commits per block, on-ledger proposals, amendments.
+\end{itemize}
+
+\textbf{Venue}
+\begin{itemize}
+\item AMIA Annual Symposium, Paper - Regular: 10 pages, abstract 125--150 words, one column, Letter, Vancouver references. 2027 symposium 6--10 November, San Diego. Call for papers not yet out; past deadlines mid March.
+\item Alternatives: IEEE ICBC 2027 (deadline 14 January 2027), Blockchain in Healthcare Today (10,000 words, USD 1,285 APC, PubMed Central), Journal of Medical Systems (IF 5.7).
+\end{itemize}
+
+\end{document}

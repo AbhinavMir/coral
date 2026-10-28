@@ -1,0 +1,30 @@
+{
+  "file": "840398876_yampa-valley-medical-center_standardcharges.csv",
+  "payer": "United Healthcare",
+  "plan": "Broad Networks",
+  "records": 200,
+  "parse_s": 0.8400328159332275,
+  "commit_s": 3.0994415283203125e-06,
+  "commit_s_per_record": 1.99,
+  "gas_mean": 258921.74,
+  "gas_min": 258878,
+  "gas_max": 258950,
+  "index_load_s": 2.2434749603271484,
+  "verify_s": 2.2436962127685547,
+  "verify_s_per_line": 0.011218481063842774,
+  "clean": {
+    "match": 200
+  },
+  "tampered": {
+    "match": 180,
+    "amount_differs": 20
+  },
+  "altered": 20,
+  "commit_blocks": 200,
+  "commit_wall_s": 398,
+  "records_per_block_sequential": 1.0,
+  "tx_input_bytes_mean": 740.0,
+  "block_period_s": 2,
+  "gas_limit_block": 9007199254740991,
+  "note": "commit was sequential: one tx per block because the client waits for each receipt; batching N tx per block is limited by block gas only"
+}
