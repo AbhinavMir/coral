@@ -28,8 +28,9 @@ class RateRecord:
 
 
 class Chain:
-    def __init__(self, w3: Web3, address: str | None = None, relayer=None):
+    def __init__(self, w3: Web3, address: str | None = None, relayer=None, deploy_block: int = 0):
         self.w3 = w3
+        self.deploy_block = deploy_block
         art = compile_registry()
         self.abi = art["abi"]
         self.bin = art["bin"]
@@ -55,21 +56,23 @@ class Chain:
             acct = Account.from_key(key)
             w3.middleware_onion.inject(_signing_middleware(acct), layer=0)
             relayer = acct.address
-        address = None
+        address, deploy_block = None, 0
         if DEPLOY_FILE.exists():
-            address = json.loads(DEPLOY_FILE.read_text()).get("address")
-        return cls(w3, address, relayer)
+            d = json.loads(DEPLOY_FILE.read_text())
+            address, deploy_block = d.get("address"), d.get("block", 0)
+        return cls(w3, address, relayer, deploy_block)
 
     def deploy(self, registrar: str) -> str:
         factory = self.w3.eth.contract(abi=self.abi, bytecode=self.bin)
         tx = factory.constructor(Web3.to_checksum_address(registrar)).transact({"from": self.relayer})
         rcpt = self.w3.eth.wait_for_transaction_receipt(tx)
         self.contract = self.w3.eth.contract(address=rcpt.contractAddress, abi=self.abi)
+        self.deploy_block = rcpt.blockNumber
         return rcpt.contractAddress
 
     def save_deployment(self):
         DEPLOY_FILE.parent.mkdir(exist_ok=True)
-        DEPLOY_FILE.write_text(json.dumps({"address": self.contract.address, "chainId": self.w3.eth.chain_id}))
+        DEPLOY_FILE.write_text(json.dumps({"address": self.contract.address, "chainId": self.w3.eth.chain_id, "block": self.deploy_block}))
 
     @property
     def domain(self) -> dict:
@@ -134,6 +137,17 @@ class Chain:
         )
         return RateRecord(rate_id, rate, c[0], c[1], c[2])
 
+    def logs(self, event, argument_filters=None, step: int = 4000) -> list:
+        """All logs of `event` since deployment, in block ranges under Besu's 5000-block eth_getLogs limit."""
+        out = []
+        head = self.w3.eth.block_number
+        start = self.deploy_block
+        while start <= head:
+            end = min(start + step - 1, head)
+            out += event.get_logs(from_block=start, to_block=end, argument_filters=argument_filters)
+            start = end + 1
+        return out
+
     def rates_for(self, provider_id: str | None = None, payer_id: str | None = None) -> list[RateRecord]:
         """All committed rates, filtered by indexed provider/payer, read from events."""
         flt = {}
@@ -141,7 +155,7 @@ class Chain:
             flt["providerId"] = b32(provider_id)
         if payer_id:
             flt["payerId"] = b32(payer_id)
-        logs = self.contract.events.RateCommitted().get_logs(from_block=0, argument_filters=flt or None)
+        logs = self.logs(self.contract.events.RateCommitted(), flt or None)
         return [self.get_rate(lg["args"]["rateId"]) for lg in logs]
 
     def find_rate(self, payer_id, plan_id, provider_id, npi, code, modifier, setting, at: int) -> list[RateRecord]:
@@ -157,8 +171,7 @@ class Chain:
         return out
 
     def chargemasters_for(self, provider_id: str) -> list[dict]:
-        logs = self.contract.events.ChargemasterCommitted().get_logs(
-            from_block=0, argument_filters={"providerId": b32(provider_id)})
+        logs = self.logs(self.contract.events.ChargemasterCommitted(), {"providerId": b32(provider_id)})
         return [{
             "id": lg["args"]["cmId"], "version": unb32(lg["args"]["version"]),
             "fileHash": bytes(lg["args"]["fileHash"]), "effective": lg["args"]["effective"],
@@ -171,7 +184,7 @@ class Chain:
         return {"kind": {1: "provider", 2: "payer"}[e[0]], "root": e[1], "registeredAt": e[2]}
 
     def entities(self) -> list[dict]:
-        logs = self.contract.events.EntityRegistered().get_logs(from_block=0)
+        logs = self.logs(self.contract.events.EntityRegistered())
         seen = {}
         for lg in logs:
             a = lg["args"]
@@ -179,8 +192,7 @@ class Chain:
         return list(seen.values())
 
     def delegations_for(self, entity_id: str) -> list[dict]:
-        logs = self.contract.events.SignerDelegated().get_logs(
-            from_block=0, argument_filters={"entityId": b32(entity_id)})
+        logs = self.logs(self.contract.events.SignerDelegated(), {"entityId": b32(entity_id)})
         out = []
         for lg in logs:
             d = self.contract.functions.delegations(lg["args"]["signer"]).call()
@@ -214,7 +226,7 @@ def _signing_middleware(acct):
 
 def _commit_receipts(self, provider_id: str):
     """Transaction receipts of every RateCommitted for a provider (gas accounting)."""
-    logs = self.contract.events.RateCommitted().get_logs(from_block=0, argument_filters={"providerId": b32(provider_id)})
+    logs = self.logs(self.contract.events.RateCommitted(), {"providerId": b32(provider_id)})
     return [self.w3.eth.get_transaction_receipt(lg["transactionHash"]) for lg in logs]
 
 
