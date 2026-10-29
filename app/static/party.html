@@ -15,6 +15,7 @@
   <p class="note">Every rate on the ledger. Both parties signed each row; the record id is what the published files cite.</p>
   <div class="search"><input id="q" type="search" placeholder="Search code, plan, provider, payer, contract, or record id" autofocus><span class="muted" id="ratesCount"></span></div>
   <div class="facets" id="facets"></div>
+  <div class="loading" id="ratesLoading"><span class="spinner"></span> Reading the ledger…</div>
   <table><thead id="ratesHead"></thead><tbody id="ratesBody"></tbody></table>
 </section>
 
@@ -91,7 +92,7 @@ async function init(){
   $('#keysEntity').onchange=()=>{$('#entity').value=$('#keysEntity').value;$('#entity').onchange();};
   $('#cdmEntity').onchange=refreshCdm;
   $('#q').oninput=drawRates;
-  RATES=await api('/api/rates'); drawRates();
+  RATES=await api('/api/rates'); $('#ratesLoading').remove(); drawRates();
   EX=await api('/api/examples');
   $('#exampleSel').innerHTML='<option value="">—</option>'+EX.rates.map((r,i)=>`<option value="${i}">${r.code} ${r.setting} · ${r.payer} / ${r.plan} · ${r.formula==='fixed'?'$'+r.value.toFixed(2):r.value.toFixed(2)+'% of charges'}</option>`).join('');
   $('#exampleSel').onchange=()=>{const r=EX.rates[$('#exampleSel').value];if(!r)return;const f=$('#proposeForm');
@@ -151,7 +152,7 @@ async function refresh(){
 
 $('#proposeForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);const body=Object.fromEntries(f.entries());body.value=Number(body.value);
   try{const p=await api('/api/propose?entityId='+ME,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});$('#proposeMsg').className='muted';$('#proposeMsg').textContent=`signed as ${nameOf(p.proposer)}; waits for ${nameOf(p.awaiting)} to countersign`;refresh();}catch(e){$('#proposeMsg').textContent=e.message;$('#proposeMsg').className='bad';}};
-window.countersign=async id=>{try{await api(`/api/countersign?entityId=${ME}&pendingId=${id}`,{method:'POST'});RATES=await api('/api/rates');drawRates();refresh();}catch(e){alert(e.message);}};
+window.countersign=async id=>{const b=event.target;b.disabled=true;b.innerHTML='<span class="spinner"></span>';try{await api(`/api/countersign?entityId=${ME}&pendingId=${id}`,{method:'POST'});RATES=await api('/api/rates');drawRates();refresh();}catch(e){alert(e.message);refresh();}};
 window.reject=async id=>{await api(`/api/reject?entityId=${ME}&pendingId=${id}`,{method:'POST'});refresh();};
 $('#cdmForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);f.append('entityId',$('#cdmEntity').value);try{const r=await api('/api/chargemaster',{method:'POST',body:f});$('#cdmMsg').textContent=`signed ${r.version} sha256 ${r.sha256.slice(0,16)}… (${r.bytes} bytes)`;refresh();}catch(e){$('#cdmMsg').textContent=e.message;}};
 $('#rotateBtn').onclick=async()=>{try{const r=await api('/api/keys/rotate?entityId='+ME,{method:'POST'});$('#rotateMsg').textContent='new signing key '+r.newSigner;ENTITIES=await api('/api/entities');refresh();}catch(e){$('#rotateMsg').textContent=e.message;}};

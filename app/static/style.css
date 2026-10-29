@@ -39,3 +39,6 @@ pre { background:var(--soft); padding:8px; overflow:auto; font-size:12px; }
 .chip.on .muted { color:#ccc; }
 th.sort { cursor:pointer; user-select:none; }
 th.sort.on { text-decoration:underline; }
+.spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--line); border-top-color:var(--fg); border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.loading { color:var(--muted); font-size:13px; padding:24px 0; }
