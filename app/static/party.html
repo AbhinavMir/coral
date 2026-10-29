@@ -13,8 +13,7 @@
 
 <section id="rates" class="active">
   <p class="note">Every rate on the ledger. Both parties signed each row; the record id is what the published files cite.</p>
-  <div class="search"><input id="q" type="search" placeholder="Search code, plan, provider, payer, contract, or record id" autofocus><span class="muted" id="ratesCount"></span></div>
-  <p class="filters"><label>Payer <select id="fPayer"><option value="">all</option></select></label> <label>Plan <select id="fPlan"><option value="">all</option></select></label> <label>Setting <select id="fSetting"><option value="">all</option><option>inpatient</option><option>outpatient</option><option>professional</option></select></label> <label>Formula <select id="fFormula"><option value="">all</option><option value="fixed">fixed dollar</option><option value="percent_of_charges">percent of charges</option></select></label></p>
+  <div class="search"><input id="q" type="search" placeholder="Search, e.g. aetna inpatient percent" autofocus><span class="muted" id="ratesCount"></span></div>
   <div class="loading" id="ratesLoading"><span class="spinner"></span>Reading the ledger…</div>
   <table><thead id="ratesHead"></thead><tbody id="ratesBody"></tbody></table>
 </section>
@@ -87,16 +86,13 @@ async function init(){
   const payerOpts=ENTITIES.filter(e=>e.kind==='payer').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
   const allOpts=ENTITIES.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
   $('#providerSel').innerHTML=provOpts; $('#payerSel').innerHTML=payerOpts; $('#cdmEntity').innerHTML=provOpts;
-  $('#entity').innerHTML=allOpts; $('#keysEntity').innerHTML=allOpts; $('#fPayer').innerHTML+=payerOpts;
+  $('#entity').innerHTML=allOpts; $('#keysEntity').innerHTML=allOpts;
   ME=location.hash.slice(1)||ENTITIES[0].id; $('#entity').value=ME; $('#keysEntity').value=ME;
   $('#entity').onchange=()=>{ME=$('#entity').value;location.hash=ME;$('#keysEntity').value=ME;refresh();};
   $('#keysEntity').onchange=()=>{$('#entity').value=$('#keysEntity').value;$('#entity').onchange();};
   $('#cdmEntity').onchange=refreshCdm;
-  $('#fPayer').onchange=$('#fPlan').onchange=$('#fSetting').onchange=$('#fFormula').onchange=drawRates;
   $('#q').oninput=drawRates;
-  RATES=await api('/api/rates'); $('#ratesLoading').remove();
-  $('#fPlan').innerHTML+=[...new Set(RATES.map(r=>r.planId))].sort().map(v=>`<option>${v}</option>`).join('');
-  drawRates();
+  RATES=await api('/api/rates'); $('#ratesLoading').remove(); drawRates();
   EX=await api('/api/examples');
   $('#exampleSel').innerHTML='<option value="">—</option>'+EX.rates.map((r,i)=>`<option value="${i}">${r.code} ${r.setting} · ${r.payer} / ${r.plan} · ${r.formula==='fixed'?'$'+r.value.toFixed(2):r.value.toFixed(2)+'% of charges'}</option>`).join('');
   $('#exampleSel').onchange=()=>{const r=EX.rates[$('#exampleSel').value];if(!r)return;const f=$('#proposeForm');
@@ -112,10 +108,10 @@ async function init(){
 
 const COLS=[['id','Record',r=>short(r.id),'mono'],['providerId','Provider',r=>nameOf(r.providerId)],['payerId','Payer',r=>nameOf(r.payerId)],['planId','Plan',r=>r.planId],['code','Code',r=>r.code+(r.modifier?'-'+r.modifier:'')],['setting','Setting',r=>r.setting],['value','Rate',rateText],['start','Effective',r=>fmtD(r.start)+' → '+fmtD(r.end)],['contractVersion','Contract',r=>r.contractVersion],['providerSigner','Signed by',r=>short(r.providerSigner)+'<br>'+short(r.payerSigner),'mono']];
 let SORT={key:'committedAt',dir:-1};
-function matches(r,q){if(!q)return true;const hay=[r.id,nameOf(r.providerId),nameOf(r.payerId),r.planId,r.code,r.contractVersion,r.referenceVersion,r.setting].join(' ').toLowerCase();return q.split(/\s+/).every(t=>hay.includes(t));}
+function matches(r,q){if(!q)return true;const hay=[r.id,nameOf(r.providerId),nameOf(r.payerId),r.planId,r.code,r.contractVersion,r.referenceVersion,r.setting,r.formula==='fixed'?'fixed':'percent'].join(' ').toLowerCase();return q.split(/\s+/).every(t=>hay.includes(t));}
 function drawRates(){
-  const q=$('#q').value.trim().toLowerCase(), fp=$('#fPayer').value, fl=$('#fPlan').value, fs=$('#fSetting').value, ff=$('#fFormula').value;
-  let rows=RATES.filter(r=>matches(r,q)&&(!fp||r.payerId===fp)&&(!fl||r.planId===fl)&&(!fs||r.setting===fs)&&(!ff||r.formula===ff));
+  const q=$('#q').value.trim().toLowerCase();
+  let rows=RATES.filter(r=>matches(r,q));
   rows.sort((a,b)=>{const x=a[SORT.key],y=b[SORT.key];return (x<y?-1:x>y?1:0)*SORT.dir;});
   $('#ratesCount').textContent=`${rows.length} of ${RATES.length} records`;
   $('#ratesHead').innerHTML='<tr>'+COLS.map(([k,label])=>`<th class="sort${SORT.key===k?' on':''}" data-k="${k}">${label}${SORT.key===k?(SORT.dir>0?' ↑':' ↓'):''}</th>`).join('')+'</tr>';
