@@ -30,3 +30,12 @@ pre { background:var(--soft); padding:8px; overflow:auto; font-size:12px; }
 .note { color:var(--muted); font-size:12px; margin:4px 0 10px; }
 .role { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
 .role select { font:inherit; padding:5px; }
+.search { display:flex; gap:12px; align-items:center; margin:8px 0; }
+.search input { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:3px; width:480px; max-width:100%; }
+.facets { display:flex; flex-wrap:wrap; gap:6px 24px; margin-bottom:12px; }
+.facet { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.chip { font:inherit; font-size:12px; padding:3px 9px; border:1px solid var(--line); border-radius:12px; background:#fff; cursor:pointer; }
+.chip.on { background:var(--fg); color:#fff; border-color:var(--fg); }
+.chip.on .muted { color:#ccc; }
+th.sort { cursor:pointer; user-select:none; }
+th.sort.on { text-decoration:underline; }
