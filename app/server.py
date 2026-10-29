@@ -138,6 +138,12 @@ def pending(entityId: str):
     return [p for p in _pending() if entityId in (p["rate"]["providerId"], p["rate"]["payerId"])]
 
 
+@app.get("/api/examples")
+def examples():
+    """Ten example rates copied from the UCHealth file, for the propose form. See data/examples.json."""
+    return json.loads((ROOT.parent / "data" / "examples.json").read_text())
+
+
 @app.post("/api/propose")
 def propose(entityId: str, body: RateIn):
     e = _entity(entityId)

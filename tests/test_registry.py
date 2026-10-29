@@ -29,7 +29,7 @@ def rate(**kw) -> Rate:
     base = dict(
         payerId="PAYER:UHC", planId="Broad Networks", providerId="TIN:84-0398876", npi="1790787307",
         code="CPT:70450", modifier_="", setting=2, formula=0, value=114_615,
-        start=NOW - 30 * DAY, end=NOW + 335 * DAY, contractVersion="FILE-2025-11-01", referenceVersion="",
+        start=NOW - 30 * DAY, end=NOW + 335 * DAY, contractVersion="example agreement, UHC", referenceVersion="",
     )
     base.update(kw)
     return Rate(**base)
@@ -130,13 +130,13 @@ def test_verify_fixed(world):
 
 def test_verify_percent_of_charges(world):
     ch, _, _, ps, _, qs = world
-    cm = ChargemasterVersion("TIN:84-0398876", "CDM-2025-11-01", b"\x11" * 32, NOW - 60 * DAY)
+    cm = ChargemasterVersion("TIN:84-0398876", "example chargemaster", b"\x11" * 32, NOW - 60 * DAY)
     ch.commit_chargemaster(cm, ps.key)
-    ch.commit_rate_with_keys(rate(formula=1, value=8_440, referenceVersion="CDM-2025-11-01"), ps.key, qs.key)
+    ch.commit_rate_with_keys(rate(formula=1, value=8_440, referenceVersion="example chargemaster"), ps.key, qs.key)
     line = Line("provider", "PAYER:UHC", "Broad Networks", "TIN:84-0398876", "1790787307",
                 "CPT:70450", "", 2, amount_cents=114_615, percent_bp=None, gross_charge_cents=135_800)
     v = verify_line(ch, line, NOW)
     assert v.status == "match" and v.expected_cents == 114_615
     line.gross_charge_cents = None
     assert verify_line(ch, line, NOW).status == "needs_chargemaster"
-    assert ch.chargemasters_for("TIN:84-0398876")[0]["version"] == "CDM-2025-11-01"
+    assert ch.chargemasters_for("TIN:84-0398876")[0]["version"] == "example chargemaster"

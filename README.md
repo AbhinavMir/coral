@@ -27,6 +27,7 @@ python3 -m venv .venv && .venv/bin/pip install web3 eth-account eth-tester py-ev
 .venv/bin/python -m pytest tests            # in-memory EVM
 cd besu && docker compose up -d && cd ..    # 4 Besu validators, RPC on :8545
 .venv/bin/python scripts/bootstrap.py       # deploy, register UCHealth Yampa Valley, United Healthcare, Aetna; write build/keys.json
+.venv/bin/python scripts/seed_examples.py   # sign the ten example rates in data/examples.json
 .venv/bin/uvicorn app.server:app --port 8000
 ```
 
@@ -54,6 +55,8 @@ coral/match.py               pair provider and payer lines, agreement statistics
 app/                         FastAPI server and static pages
 besu/                        genesis, validator keys, docker-compose
 scripts/bootstrap.py         deploy and register demo entities
+scripts/seed_examples.py     sign the ten example rates and the chargemaster hash
+data/examples.json           ten rates copied from the UCHealth file; version labels are examples
 scripts/evaluate_provider.py sign real lines, verify clean and tampered copies
 tests/                       contract and verifier tests
 results/                     evaluation output

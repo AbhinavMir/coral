@@ -83,7 +83,7 @@ def main():
     start, end = now - 30 * 86400, now + 335 * 86400
     for ln in ([] if args.skip_commit else lines):
         r = Rate(args.payer, args.plan, args.provider, args.npi, ln.code, ln.modifier_, ln.setting, 0, ln.amount_cents,
-                 start, end, "FILE-2025-11-01", "")
+                 start, end, "example agreement, UHC", "")
         rcpt = ch._send(ch.contract.functions.commitRate(r.tuple(), sign_rate(pkey, ch.domain, r), sign_rate(qkey, ch.domain, r)))
         gas.append(rcpt.gasUsed)
     commit_s = time.time() - t1

@@ -1,0 +1,26 @@
+{
+  "source": "UCHealth Yampa Valley Medical Center standard charges file, last_updated_on 2025-11-01, version 3.0.0, type_2_npi 1790787307. Codes, payers, plans, settings, methodologies, gross charges, and amounts are copied from the file. Contract and chargemaster version labels are examples: the file does not carry them.",
+  "providerId": "TIN:84-0398876",
+  "npi": "1790787307",
+  "payers": {"United Healthcare": "PAYER:UHC", "Aetna": "PAYER:AETNA"},
+  "chargemaster": {
+    "version": "example chargemaster",
+    "effective": "2025-11-01",
+    "sha256": "685c4fc716e38529462c74bb9e3f77d4481cf0ecf14d8080a47e563798e07703",
+    "note": "SHA-256 of the standard charges file itself, which carries the gross charges the percent rates apply to."
+  },
+  "rates": [
+    {"description": "CT head/brain without contrast", "code": "CPT:70450", "setting": "outpatient", "payer": "Aetna", "plan": "Commercial", "formula": "percent_of_charges", "value": 95.00, "gross": 1358.00, "amount": 1290.10, "methodology": "percent of total billed charges"},
+    {"description": "CT head/brain without contrast", "code": "CPT:70450", "setting": "outpatient", "payer": "Aetna", "plan": "Medicare Advantage", "formula": "fixed", "value": 106.87, "methodology": "fee schedule"},
+    {"description": "Emergency department visit, level 3", "code": "CPT:99283", "setting": "inpatient", "payer": "United Healthcare", "plan": "Select Colorado", "formula": "percent_of_charges", "value": 78.30, "gross": 1178.00, "amount": 922.37, "methodology": "percent of total billed charges"},
+    {"description": "Chest X-ray, 2 views", "code": "CPT:71046", "setting": "outpatient", "payer": "Aetna", "plan": "Commercial", "formula": "percent_of_charges", "value": 95.00, "gross": 327.00, "amount": 310.65, "methodology": "percent of total billed charges"},
+    {"description": "Comprehensive metabolic panel", "code": "CPT:80053", "setting": "outpatient", "payer": "United Healthcare", "plan": "Medicare Advantage", "formula": "fixed", "value": 10.56, "methodology": "fee schedule"},
+    {"description": "Diagnostic colonoscopy", "code": "CPT:45378", "setting": "outpatient", "payer": "United Healthcare", "plan": "Medicare Advantage", "formula": "fixed", "value": 916.25, "methodology": "fee schedule"},
+    {"description": "Total knee arthroplasty", "code": "CPT:27447", "setting": "outpatient", "payer": "Aetna", "plan": "Medicare Advantage", "formula": "fixed", "value": 12930.90, "methodology": "fee schedule"},
+    {"description": "Major hip and knee joint replacement without MCC", "code": "MS-DRG:470", "setting": "inpatient", "payer": "United Healthcare", "plan": "Medicare Advantage", "formula": "fixed", "value": 23521.51, "methodology": "case rate"},
+    {"description": "Septicemia or severe sepsis without MV >96 hours with MCC", "code": "MS-DRG:871", "setting": "inpatient", "payer": "Aetna", "plan": "Medicare Advantage", "formula": "fixed", "value": 23687.34, "methodology": "case rate"},
+    {"description": "Enoxaparin 100 mg/mL syringe", "code": "HCPCS:J1650", "setting": "inpatient", "payer": "Aetna", "plan": "Commercial", "formula": "percent_of_charges", "value": 95.00, "gross": 70.94, "amount": 67.39, "methodology": "percent of total billed charges"}
+  ],
+  "contractVersion": {"United Healthcare": "example agreement, UHC", "Aetna": "example agreement, Aetna"},
+  "start": "2025-11-01"
+}
