@@ -3,25 +3,23 @@
 <body>
 <header><h1><a href="/">CORAL</a></h1><span class="muted">provider / payer</span><span class="status" id="status"></span></header>
 <main>
-<div class="role">
-  <label>Acting as <select id="entity"></select></label>
-  <span class="muted" id="entityMeta"></span>
-</div>
 <nav class="tabs">
   <button data-tab="rates" class="active">Negotiated rates</button>
   <button data-tab="pending">Pending <span id="pendingCount"></span></button>
   <button data-tab="propose">Propose</button>
-  <button data-tab="cdm" id="cdmTab">Chargemaster</button>
+  <button data-tab="cdm">Chargemaster</button>
   <button data-tab="keys">Keys</button>
 </nav>
 
 <section id="rates" class="active">
-  <p class="note">Rates both parties signed. One row is one ledger record; the record id is what the published files cite.</p>
-  <table><thead><tr><th>Record</th><th>Counterparty</th><th>Plan</th><th>Code</th><th>Setting</th><th>Rate</th><th>Effective</th><th>Contract</th><th>Signed by</th></tr></thead><tbody id="ratesBody"></tbody></table>
+  <p class="note">Every rate on the ledger. Both parties signed each row; the record id is what the published files cite.</p>
+  <p><label>Provider <select id="fProv"><option value="">all</option></select></label> <label>Payer <select id="fPayer"><option value="">all</option></select></label> <label>Code <input id="fCode" placeholder="CPT:70450" size="12"></label> <span class="muted" id="ratesCount"></span></p>
+  <table><thead><tr><th>Record</th><th>Provider</th><th>Payer</th><th>Plan</th><th>Code</th><th>Setting</th><th>Rate</th><th>Effective</th><th>Contract</th><th>Signed by</th></tr></thead><tbody id="ratesBody"></tbody></table>
 </section>
 
 <section id="pending">
   <p class="note">Proposals signed by one party and waiting for the other. Countersigning puts both signatures on the ledger in one transaction.</p>
+  <p><label>Sign as <select id="entity"></select></label> <span class="muted">(prototype: this server holds every signing key)</span></p>
   <table><thead><tr><th>Proposed by</th><th>Plan</th><th>Code</th><th>Setting</th><th>Rate</th><th>Effective</th><th>Contract</th><th></th></tr></thead><tbody id="pendingBody"></tbody></table>
 </section>
 
@@ -47,6 +45,7 @@
 </section>
 
 <section id="cdm">
+  <p><label>Provider <select id="cdmEntity"></select></label></p>
   <p class="note">The provider's list prices. The provider signs the hash of each version; a percent-of-charges rate names the version it applies to.</p>
   <form class="grid" id="cdmForm">
     <label>Version <input name="version" required></label>
@@ -58,6 +57,7 @@
 </section>
 
 <section id="keys">
+  <p><label>Entity <select id="keysEntity"></select></label></p>
   <p class="note">The root key is held offline and only delegates or revokes signing keys. Rotation revokes the current signing key from now; records it signed earlier stay valid.</p>
   <div id="keysInfo"></div>
   <button class="primary" id="rotateBtn">Rotate signing key</button> <span id="rotateMsg" class="muted"></span>
@@ -69,7 +69,7 @@ const $=s=>document.querySelector(s);
 const fmtD=t=>t?new Date(t*1000).toISOString().slice(0,10):'open';
 const fmtT=t=>new Date(t*1000).toISOString().replace('T',' ').slice(0,19);
 const short=a=>a.slice(0,10)+'…';
-let ENTITIES=[], ME=null, EX=null;
+let ENTITIES=[], ME=null, EX=null, RATES=[];
 const api=async(p,o)=>{const r=await fetch(p,o);const j=await r.json();if(!r.ok)throw new Error(j.detail||r.statusText);return j;};
 const me=()=>ENTITIES.find(e=>e.id===ME);
 const nameOf=id=>(ENTITIES.find(e=>e.id===id)||{}).name||id;
@@ -80,11 +80,18 @@ document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{document.
 async function init(){
   const s=await api('/api/status'); $('#status').textContent=`chain ${s.chainId} · block ${s.block} · ${s.peers} peers`;
   ENTITIES=await api('/api/entities');
-  $('#entity').innerHTML=ENTITIES.map(e=>`<option value="${e.id}">${e.name} (${e.id})</option>`).join('');
-  $('#providerSel').innerHTML=ENTITIES.filter(e=>e.kind==='provider').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
-  $('#payerSel').innerHTML=ENTITIES.filter(e=>e.kind==='payer').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
-  ME=location.hash.slice(1)||ENTITIES[0].id; $('#entity').value=ME;
+  const provOpts=ENTITIES.filter(e=>e.kind==='provider').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  const payerOpts=ENTITIES.filter(e=>e.kind==='payer').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  $('#entity').innerHTML=ENTITIES.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  $('#keysEntity').innerHTML=$('#entity').innerHTML;
+  $('#providerSel').innerHTML=provOpts; $('#cdmEntity').innerHTML=provOpts; $('#payerSel').innerHTML=payerOpts;
+  $('#fProv').innerHTML+=provOpts; $('#fPayer').innerHTML+=payerOpts;
+  ME=location.hash.slice(1)||ENTITIES[0].id; $('#entity').value=ME; $('#keysEntity').value=ME;
   $('#entity').onchange=()=>{ME=$('#entity').value;location.hash=ME;refresh();};
+  $('#keysEntity').onchange=()=>{$('#entity').value=$('#keysEntity').value;$('#entity').onchange();};
+  $('#cdmEntity').onchange=refreshCdm;
+  $('#fProv').onchange=$('#fPayer').onchange=$('#fCode').oninput=drawRates;
+  RATES=await api('/api/rates'); drawRates();
   EX=await api('/api/examples');
   $('#exampleSel').innerHTML='<option value="">—</option>'+EX.rates.map((r,i)=>`<option value="${i}">${r.code} ${r.setting} · ${r.payer} / ${r.plan} · ${r.formula==='fixed'?'$'+r.value.toFixed(2):r.value.toFixed(2)+'% of charges'}</option>`).join('');
   $('#exampleSel').onchange=()=>{const r=EX.rates[$('#exampleSel').value];if(!r)return;const f=$('#proposeForm');
@@ -98,33 +105,39 @@ async function init(){
   refresh();
 }
 
+function drawRates(){
+  const fp=$('#fProv').value, fq=$('#fPayer').value, fc=$('#fCode').value.trim().toUpperCase();
+  const rows=RATES.filter(r=>(!fp||r.providerId===fp)&&(!fq||r.payerId===fq)&&(!fc||r.code.toUpperCase().includes(fc)));
+  $('#ratesCount').textContent=`${rows.length} of ${RATES.length} records`;
+  $('#ratesBody').innerHTML=rows.map(r=>`<tr><td class="mono">${short(r.id)}</td><td>${nameOf(r.providerId)}</td><td>${nameOf(r.payerId)}</td><td>${r.planId}</td><td>${r.code}${r.modifier?'-'+r.modifier:''}</td><td>${r.setting}</td><td>${rateText(r)}</td><td>${fmtD(r.start)} → ${fmtD(r.end)}</td><td>${r.contractVersion}</td><td class="mono">${short(r.providerSigner)}<br>${short(r.payerSigner)}</td></tr>`).join('')||'<tr><td colspan=10 class=muted>no records</td></tr>';
+}
+
+async function refreshCdm(){
+  const id=$('#cdmEntity').value;
+  const cdm=await api('/api/chargemasters?entityId='+id);
+  $('#cdmBody').innerHTML=cdm.map(c=>`<tr><td>${c.version}</td><td class="mono">${c.fileHash.slice(0,16)}…</td><td>${fmtD(c.effective)}</td><td class="mono">${short(c.id)}</td></tr>`).join('')||'<tr><td colspan=4 class=muted>none signed</td></tr>';
+}
+
 async function refresh(){
-  const e=me(); $('#entityMeta').textContent=`${e.kind}${e.npi?' · NPI '+e.npi:''} · ${e.signers.filter(k=>!k.revokedFrom).length} active signing key`;
-  $('#cdmTab').style.display=e.kind==='provider'?'':'none';
+  const e=me();
   if(e.kind==='provider'){$('#providerSel').value=ME;$('#proposeForm').npi.value=e.npi;}else{$('#payerSel').value=ME;}
-  const q=e.kind==='provider'?`providerId=${ME}`:`payerId=${ME}`;
-  const rates=await api('/api/rates?'+q);
-  $('#ratesBody').innerHTML=rates.map(r=>{const other=e.kind==='provider'?r.payerId:r.providerId;
-    return `<tr><td class="mono">${short(r.id)}</td><td>${nameOf(other)}</td><td>${r.planId}</td><td>${r.code}${r.modifier?'-'+r.modifier:''}</td><td>${r.setting}</td><td>${rateText(r)}</td><td>${fmtD(r.start)} → ${fmtD(r.end)}</td><td>${r.contractVersion}</td><td class="mono">${nameOf(r.providerId)} ${short(r.providerSigner)}<br>${nameOf(r.payerId)} ${short(r.payerSigner)}</td></tr>`}).join('')||'<tr><td colspan=9 class=muted>no negotiated rates</td></tr>';
   const pend=await api('/api/pending?entityId='+ME);
   const mine=pend.filter(p=>p.awaiting===ME).length; $('#pendingCount').textContent=mine?`(${mine})`:'';
   $('#pendingBody').innerHTML=pend.map(p=>{const r=p.rate;const v=r.formula==='fixed'?`$${Number(r.value).toFixed(2)}`:`${r.value}% of charges`;
     const act=p.awaiting===ME?`<button class="small" onclick="countersign('${p.id}')">Countersign</button> <button class="small" onclick="reject('${p.id}')">Reject</button>`:`<span class=muted>waiting for ${nameOf(p.awaiting)}</span> <button class="small" onclick="reject('${p.id}')">Withdraw</button>`;
     return `<tr><td>${nameOf(p.proposer)}</td><td>${r.planId}</td><td>${r.code}${r.modifier?'-'+r.modifier:''}</td><td>${r.setting}</td><td>${v}</td><td>${r.start} → ${r.end||'open'}</td><td>${r.contractVersion}</td><td>${act}</td></tr>`}).join('')||'<tr><td colspan=8 class=muted>nothing pending</td></tr>';
-  if(e.kind==='provider'){
-    const cdm=await api('/api/chargemasters?entityId='+ME);
-    $('#cdmBody').innerHTML=cdm.map(c=>`<tr><td>${c.version}</td><td class="mono">${c.fileHash.slice(0,16)}…</td><td>${fmtD(c.effective)}</td><td class="mono">${short(c.id)}</td></tr>`).join('')||'<tr><td colspan=4 class=muted>none signed</td></tr>';
-  }
+  refreshCdm();
+  $('#keysEntity').value=ME;
   $('#keysInfo').innerHTML=`<p>${e.name} · root key <span class="mono">${e.root}</span></p>`;
   const now=Date.now()/1000;
   $('#keysBody').innerHTML=e.signers.map(k=>{const live=now>=k.notBefore&&(!k.notAfter||now<k.notAfter)&&(!k.revokedFrom||now<k.revokedFrom);return `<tr><td class="mono">${k.signer}</td><td>${fmtT(k.notBefore)}</td><td>${k.revokedFrom?fmtT(k.revokedFrom):'—'}</td><td class="${live?'ok':'bad'}">${live?'active':'revoked'}</td></tr>`}).join('');
 }
 
 $('#proposeForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);const body=Object.fromEntries(f.entries());body.value=Number(body.value);
-  try{const p=await api('/api/propose?entityId='+ME,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});$('#proposeMsg').className='muted';$('#proposeMsg').textContent=`signed; waits for ${nameOf(p.awaiting)} to countersign`;refresh();}catch(e){$('#proposeMsg').textContent=e.message;$('#proposeMsg').className='bad';}};
-window.countersign=async id=>{try{await api(`/api/countersign?entityId=${ME}&pendingId=${id}`,{method:'POST'});refresh();}catch(e){alert(e.message);}};
+  try{const p=await api('/api/propose?entityId='+ME,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});$('#proposeMsg').className='muted';$('#proposeMsg').textContent=`signed as ${nameOf(p.proposer)}; waits for ${nameOf(p.awaiting)} to countersign`;refresh();}catch(e){$('#proposeMsg').textContent=e.message;$('#proposeMsg').className='bad';}};
+window.countersign=async id=>{try{await api(`/api/countersign?entityId=${ME}&pendingId=${id}`,{method:'POST'});RATES=await api('/api/rates');drawRates();refresh();}catch(e){alert(e.message);}};
 window.reject=async id=>{await api(`/api/reject?entityId=${ME}&pendingId=${id}`,{method:'POST'});refresh();};
-$('#cdmForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);f.append('entityId',ME);try{const r=await api('/api/chargemaster',{method:'POST',body:f});$('#cdmMsg').textContent=`signed ${r.version} sha256 ${r.sha256.slice(0,16)}… (${r.bytes} bytes)`;refresh();}catch(e){$('#cdmMsg').textContent=e.message;}};
+$('#cdmForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);f.append('entityId',$('#cdmEntity').value);try{const r=await api('/api/chargemaster',{method:'POST',body:f});$('#cdmMsg').textContent=`signed ${r.version} sha256 ${r.sha256.slice(0,16)}… (${r.bytes} bytes)`;refresh();}catch(e){$('#cdmMsg').textContent=e.message;}};
 $('#rotateBtn').onclick=async()=>{try{const r=await api('/api/keys/rotate?entityId='+ME,{method:'POST'});$('#rotateMsg').textContent='new signing key '+r.newSigner;ENTITIES=await api('/api/entities');refresh();}catch(e){$('#rotateMsg').textContent=e.message;}};
 init();
 </script>

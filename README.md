@@ -31,7 +31,7 @@ cd besu && docker compose up -d && cd ..    # 4 Besu validators, RPC on :8545
 .venv/bin/uvicorn app.server:app --port 8000
 ```
 
-Open http://127.0.0.1:8000. `/party` acts as a provider or payer: negotiated rates, pending, propose, chargemaster, keys. `/cms`: registry and verify a published file.
+Open http://127.0.0.1:8000. `/party`: all negotiated rates on the ledger, with filters; pending, propose, chargemaster, keys. `/cms`: registry and verify a published file.
 
 Evaluation on a real provider file:
 
