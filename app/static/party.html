@@ -112,9 +112,9 @@ function drawRates(){
   const rows=RATES.filter(r=>matches(r,q));
   $('#ratesCount').textContent=`${rows.length} of ${RATES.length}`;
   $('#ratesList').innerHTML=rows.map(r=>`<li>
-    <span class="code">${r.code}${r.modifier?'-'+r.modifier:''}</span><span class="muted">${r.setting}</span>
+    <span class="code">${r.code}${r.modifier?'-'+r.modifier:''}</span>
     <span>${nameOf(r.providerId)} · ${nameOf(r.payerId)} · ${r.planId}</span>
-    <span class="amt">${rateText(r)}</span>
+    <span class="amt">${rateText(r)}</span><span class="muted">${r.setting}</span>
     <details><summary class="muted">${short(r.id)}</summary><div class="mono muted">record ${r.id}<br>effective ${fmtD(r.start)} → ${fmtD(r.end)} · ${r.contractVersion}<br>provider signer ${r.providerSigner}<br>payer signer ${r.payerSigner}<br>committed ${fmtT(r.committedAt)}</div></details>
   </li>`).join('')||'<li class="muted">no records match</li>';
 }

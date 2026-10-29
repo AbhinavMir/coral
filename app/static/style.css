@@ -33,7 +33,7 @@ pre { background:var(--soft); padding:8px; overflow:auto; font-size:12px; }
 .search { display:flex; gap:12px; align-items:center; margin:8px 0; }
 .search input { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:3px; width:480px; max-width:100%; }
 .list { list-style:none; margin:0; padding:0; }
-.list li { display:grid; grid-template-columns:150px 90px 1fr 120px 130px; gap:12px; align-items:start; padding:8px 0; border-bottom:1px solid var(--line); }
+.list li { display:grid; grid-template-columns:150px 1fr 120px 90px 130px; gap:12px; align-items:start; padding:8px 0; border-bottom:1px solid var(--line); }
 .list .code { font-weight:600; }
 .list .amt { text-align:right; font-variant-numeric:tabular-nums; }
 .list details { grid-column:1 / -1; font-size:12px; margin-top:-4px; }
