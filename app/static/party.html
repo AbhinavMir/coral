@@ -106,6 +106,7 @@ async function init(){
   refresh();
 }
 
+function matches(r,q){if(!q)return true;const hay=[r.id,nameOf(r.providerId),nameOf(r.payerId),r.planId,r.code,r.contractVersion,r.referenceVersion,r.setting,r.formula==='fixed'?'fixed':'percent'].join(' ').toLowerCase();return q.split(/\s+/).every(t=>hay.includes(t));}
 function drawRates(){
   const q=$('#q').value.trim().toLowerCase();
   const rows=RATES.filter(r=>matches(r,q));
