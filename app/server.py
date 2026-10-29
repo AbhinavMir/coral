@@ -1,4 +1,4 @@
-"""CORAL web app: provider, payer, and CMS views over the ledger.
+"""CORAL web app: provider and payer page, CMS page.
 
 Prototype. Signing keys are held by this server (build/keys.json) and chosen by
 the entity named in the request. A deployment replaces `_sign_for` with the
@@ -18,14 +18,14 @@ from pathlib import Path
 
 from eth_account import Account
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from coral.chain import Chain, DEPLOY_FILE
 from coral.typed import Rate, ChargemasterVersion, sign_rate, SETTING_NAME, FORMULA_NAME, FORMULA, SETTING
 from coral.verify import Line, verify_line
-from coral.mrf import provider_csv
+from coral.mrf import provider_csv, provider_header, payer_json
 
 ROOT = Path(__file__).resolve().parent
 KEYS_FILE = DEPLOY_FILE.parent / "keys.json"
@@ -112,7 +112,7 @@ def entities():
     out = []
     for e in chain.entities():
         meta = keys["entities"].get(e["id"], {})
-        out.append({**e, "name": meta.get("name", ""), "signers": chain.delegations_for(e["id"])})
+        out.append({**e, "name": meta.get("name", ""), "npi": meta.get("npi", ""), "signers": chain.delegations_for(e["id"])})
     return out
 
 
@@ -224,95 +224,54 @@ def rotate(entityId: str):
     return {"entityId": entityId, "newSigner": new.address, "signers": chain.delegations_for(entityId)}
 
 
-@app.get("/api/export/mrf")
-def export_mrf(entityId: str):
-    """Provider MRF lines (CMS v2 tall CSV subset) with a coral_record_id column."""
-    e = _entity(entityId)
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(["description", "code|1", "code|1|type", "modifiers", "setting", "payer_name", "plan_name",
-                "standard_charge|negotiated_dollar", "standard_charge|negotiated_percentage",
-                "standard_charge|methodology", "coral_record_id"])
-    for rec in chain.rates_for(provider_id=entityId):
-        r = rec.rate
-        ctype, code = r.code.split(":", 1)
-        dollar = f"{r.value/100:.2f}" if r.formula == 0 else ""
-        pct = f"{r.value/100:.2f}" if r.formula != 0 else ""
-        method = {0: "fee schedule", 1: "percent of total billed charges", 2: "other"}[r.formula]
-        w.writerow(["", code, ctype, r.modifier_, SETTING_NAME[r.setting], r.payerId, r.planId,
-                    dollar, pct, method, "0x" + rec.id.hex()])
-    return PlainTextResponse(buf.getvalue(), media_type="text/csv",
-                             headers={"Content-Disposition": f'attachment; filename="{entityId}-mrf.csv"'})
-
 
 # ---- CMS --------------------------------------------------------------------
 
 @app.post("/api/verify")
-async def verify(providerId: str = Form(...), npi: str = Form(...), payerMap: str = Form(...),
-                 asOf: str = Form(...), file: UploadFile = File(...)):
-    """Verify every negotiated line of an uploaded provider MRF CSV against the ledger.
+async def verify(kind: str = Form(...), entityId: str = Form(...), asOf: str = Form(...), file: UploadFile = File(...),
+                 planId: str = Form("")):
+    """Verify every negotiated line of a published file against the ledger.
 
-    payerMap: JSON {"payer_name|plan_name": ["PAYER:UHC", "PLAN:..."]} mapping file names to ledger ids.
+    kind "provider": CMS v2 tall CSV. The provider is `entityId`; the billing NPI comes from the file
+    header; payer names in the file are matched to registered payer names; plan names are plan ids.
+    kind "payer": Transparency in Coverage in-network JSON for payer `entityId` and plan `planId`;
+    NPIs in the file are matched to registered providers.
     """
     data = await file.read()
-    tmp = DEPLOY_FILE.parent / f"upload-{uuid.uuid4().hex[:8]}.csv"
+    tmp = DEPLOY_FILE.parent / f"upload-{uuid.uuid4().hex[:8]}"
     tmp.write_bytes(data)
-    pm = {tuple(k.split("|", 1)): tuple(v) for k, v in json.loads(payerMap).items()}
     at = int(time.mktime(time.strptime(asOf, "%Y-%m-%d")))
+    ents = keys["entities"]
     rows, counts = [], {}
     try:
-        for line in provider_csv(tmp, providerId, npi, pm):
+        if kind == "provider":
+            hdr = provider_header(tmp)
+            npi = hdr.get("type_2_npi", "").strip()
+            if not npi:
+                raise HTTPException(400, "file header has no type_2_npi")
+            payer_ids = {e["name"]: eid for eid, e in ents.items() if e["kind"] == "payer"}
+            lines = provider_csv(tmp, entityId, npi, payer_ids)
+        elif kind == "payer":
+            if not planId:
+                raise HTTPException(400, "planId is required for a payer file")
+            provider_map = {e["npi"]: eid for eid, e in ents.items() if e["kind"] == "provider" and e.get("npi")}
+            lines = payer_json(tmp, entityId, planId, provider_map)
+        else:
+            raise HTTPException(400, "kind must be provider or payer")
+        for line in lines:
             v = verify_line(chain, line, at)
             counts[v.status] = counts.get(v.status, 0) + 1
             rows.append({
-                "payerId": line.payerId, "planId": line.planId, "code": line.code, "modifier": line.modifier_,
-                "setting": SETTING_NAME[line.setting],
-                "published": line.amount_cents, "expected": v.expected_cents, "status": v.status,
+                "payerId": line.payerId, "planId": line.planId, "providerId": line.providerId, "npi": line.npi,
+                "code": line.code, "modifier": line.modifier_, "setting": SETTING_NAME[line.setting],
+                "published": line.amount_cents if line.amount_cents is not None else line.percent_bp,
+                "publishedKind": "cents" if line.amount_cents is not None else "bp",
+                "expected": v.expected_cents, "status": v.status,
                 "recordId": "0x" + v.record.id.hex() if v.record else None,
             })
     finally:
         tmp.unlink(missing_ok=True)
     return {"lines": len(rows), "counts": counts, "rows": rows[:2000]}
-
-
-@app.get("/api/verify/record")
-def verify_record(rateId: str, amount: float | None = None):
-    """Check one claim line: does this record exist, and is it live today?"""
-    rec = chain.get_rate(bytes.fromhex(rateId.removeprefix("0x")))
-    if not rec:
-        return {"status": "no_record"}
-    now = int(time.time())
-    live = rec.rate.start <= now and (rec.rate.end == 0 or now < rec.rate.end)
-    out = {"status": "live" if live else "expired", "record": _rate_json(rec)}
-    if amount is not None and rec.rate.formula == 0:
-        out["amountMatches"] = round(amount * 100) == rec.rate.value
-    return out
-
-
-@app.get("/api/coverage")
-def coverage():
-    """Per provider-payer pair: signed records, live records, signers in use."""
-    now = int(time.time())
-    pairs = {}
-    for rec in chain.rates_for():
-        k = (rec.rate.providerId, rec.rate.payerId)
-        p = pairs.setdefault(k, {"providerId": k[0], "payerId": k[1], "records": 0, "live": 0, "plans": set(), "codes": set()})
-        p["records"] += 1
-        if rec.rate.start <= now and (rec.rate.end == 0 or now < rec.rate.end):
-            p["live"] += 1
-        p["plans"].add(rec.rate.planId)
-        p["codes"].add(rec.rate.code)
-    return [{**p, "plans": sorted(p["plans"]), "codes": len(p["codes"])} for p in pairs.values()]
-
-
-@app.get("/api/ledger")
-def ledger(n: int = 20):
-    blocks = []
-    head = chain.w3.eth.block_number
-    for b in range(head, max(-1, head - n), -1):
-        blk = chain.w3.eth.get_block(b)
-        blocks.append({"number": b, "timestamp": blk.timestamp, "txs": len(blk.transactions), "hash": blk.hash.hex()})
-    return blocks
 
 
 # ---- pages ------------------------------------------------------------------

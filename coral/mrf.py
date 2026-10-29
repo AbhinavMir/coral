@@ -54,11 +54,20 @@ def _setting(s: str) -> int | None:
     return None
 
 
-def provider_csv(path: Path, provider_id: str, npi: str, payer_map: dict[tuple[str, str], tuple[str, str]]) -> Iterator[Line]:
+def provider_header(path: Path) -> dict[str, str]:
+    """The two-row header block of a CMS v2 tall CSV: provider name, last_updated_on, version, type_2_npi, ..."""
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    rows = list(csv.reader(io.StringIO("\n".join(text.splitlines()[:2]))))
+    return dict(zip(rows[0], rows[1]))
+
+
+def provider_csv(path: Path, provider_id: str, npi: str, payer_ids: dict[str, str],
+                 plans: set[str] | None = None) -> Iterator[Line]:
     """Yield one Line per negotiated row of a CMS v2 tall CSV.
 
-    payer_map: (payer_name, plan_name) as written in the file -> (payerId, planId)
-    used on the ledger. Rows whose payer/plan are not in the map are skipped.
+    payer_ids: payer_name as written in the file -> payerId on the ledger. The plan name in the
+    file is the planId. Rows whose payer is not in the map, or whose plan is not in `plans`
+    when given, are skipped.
     """
     text = path.read_text(encoding="utf-8-sig", errors="replace")
     lines = text.splitlines()
@@ -66,10 +75,10 @@ def provider_csv(path: Path, provider_id: str, npi: str, payer_map: dict[tuple[s
     start = next(i for i, ln in enumerate(lines[:10]) if "code|1" in ln)
     reader = csv.DictReader(io.StringIO("\n".join(lines[start:])))
     for row in reader:
-        key = (row.get("payer_name", "").strip(), row.get("plan_name", "").strip())
-        if key not in payer_map:
+        payer_name, plan_id = row.get("payer_name", "").strip(), row.get("plan_name", "").strip()
+        if payer_name not in payer_ids or (plans is not None and plan_id not in plans):
             continue
-        payer_id, plan_id = payer_map[key]
+        payer_id = payer_ids[payer_name]
         code, ctype = None, None
         for n in range(1, 5):
             c = row.get(f"code|{n}", "").strip()

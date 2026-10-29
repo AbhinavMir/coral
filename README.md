@@ -1,7 +1,7 @@
 # CORAL: Committed Ratesheet on Ledger
 
 A permissioned ledger on which a provider and a payer jointly sign each
-negotiated rate. Published price files and X12 claims cite the record id, so a
+negotiated rate. Published price files cite the record id, so a
 line that departs from the signed rate is detected by anyone with the file.
 
 Paper: `abstract.tex` (AMIA format). Findings: `NOTES.md`.
@@ -31,7 +31,7 @@ cd besu && docker compose up -d && cd ..    # 4 Besu validators, RPC on :8545
 .venv/bin/uvicorn app.server:app --port 8000
 ```
 
-Open http://127.0.0.1:8000. `/party` acts as a provider or payer. `/cms` is the registrar view.
+Open http://127.0.0.1:8000. `/party` acts as a provider or payer: negotiated rates, pending, propose, chargemaster, keys. `/cms`: registry and verify a published file.
 
 Evaluation on a real provider file:
 

@@ -63,9 +63,8 @@ def main():
     qkey = keys["entities"][args.payer]["signer"]["key"]
 
     t0 = time.time()
-    pm = {(args.payer_name, args.plan_name): (args.payer, args.plan)}
     lines, seen = [], set()
-    for ln in provider_csv(args.csv, args.provider, args.npi, pm):
+    for ln in provider_csv(args.csv, args.provider, args.npi, {args.payer_name: args.payer}, {args.plan}):
         if ln.amount_cents is None:
             continue
         k = (ln.code, ln.modifier_, ln.setting)

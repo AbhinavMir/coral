@@ -8,49 +8,48 @@
   <span class="muted" id="entityMeta"></span>
 </div>
 <nav class="tabs">
-  <button data-tab="rates" class="active">Signed rates</button>
+  <button data-tab="rates" class="active">Negotiated rates</button>
   <button data-tab="pending">Pending <span id="pendingCount"></span></button>
-  <button data-tab="propose">Propose a rate</button>
-  <button data-tab="cdm">Chargemaster</button>
+  <button data-tab="propose">Propose</button>
+  <button data-tab="cdm" id="cdmTab">Chargemaster</button>
   <button data-tab="keys">Keys</button>
-  <button data-tab="export">Export</button>
 </nav>
 
 <section id="rates" class="active">
-  <p class="note">Rates this entity has signed together with its counterparty. Each row is one ledger record.</p>
-  <table><thead><tr><th>Record</th><th>Counterparty</th><th>Plan</th><th>NPI</th><th>Code</th><th>Mod</th><th>Setting</th><th>Rate</th><th>Window</th><th>Contract</th><th>Committed</th></tr></thead><tbody id="ratesBody"></tbody></table>
+  <p class="note">Rates both parties signed. One row is one ledger record; the record id is what the published files cite.</p>
+  <table><thead><tr><th>Record</th><th>Counterparty</th><th>Plan</th><th>Code</th><th>Setting</th><th>Rate</th><th>Effective</th><th>Contract</th><th>Signed by</th></tr></thead><tbody id="ratesBody"></tbody></table>
 </section>
 
 <section id="pending">
-  <p class="note">Proposals waiting for a second signature. A proposal is signed by one party and held off-ledger until the other signs. Both signatures go to the ledger in one transaction.</p>
-  <table><thead><tr><th>Proposed by</th><th>Awaiting</th><th>Plan</th><th>NPI</th><th>Code</th><th>Setting</th><th>Rate</th><th>Window</th><th>Contract</th><th></th></tr></thead><tbody id="pendingBody"></tbody></table>
+  <p class="note">Proposals signed by one party and waiting for the other. Countersigning puts both signatures on the ledger in one transaction.</p>
+  <table><thead><tr><th>Proposed by</th><th>Plan</th><th>Code</th><th>Setting</th><th>Rate</th><th>Effective</th><th>Contract</th><th></th></tr></thead><tbody id="pendingBody"></tbody></table>
 </section>
 
 <section id="propose">
-  <p class="note">Fill in the rate as it appears in the contract. The counterparty sees it under Pending and countersigns.</p>
+  <p class="note">Enter the rate as written in the contract. The counterparty countersigns it under Pending.</p>
   <p><label>Load an example <select id="exampleSel"><option value="">—</option></select></label> <span class="muted" id="exampleNote"></span></p>
   <form class="grid" id="proposeForm">
     <label>Provider <select name="providerId" id="providerSel"></select></label>
     <label>Payer <select name="payerId" id="payerSel"></select></label>
-    <label>Plan id <input name="planId" required></label>
-    <label>Billing NPI <input name="npi" value="1790787307" required pattern="\d{10}"></label>
+    <label>Plan <input name="planId" required></label>
+    <label>Billing NPI <input name="npi" required pattern="\d{10}"></label>
     <label>Code <input name="code" required placeholder="CPT:70450 / MS-DRG:470"></label>
-    <label>Modifier <input name="modifier" placeholder="e.g. 26"></label>
+    <label>Modifier <input name="modifier"></label>
     <label>Setting <select name="setting"><option>outpatient</option><option>inpatient</option><option>professional</option></select></label>
     <label>Formula <select name="formula"><option value="fixed">fixed dollar</option><option value="percent_of_charges">percent of charges</option><option value="percent_of_reference">percent of reference schedule</option></select></label>
     <label>Value ($ or %) <input name="value" type="number" step="0.01" required></label>
     <label>Start <input name="start" type="date" required></label>
     <label>End (empty = open) <input name="end" type="date"></label>
-    <label>Contract version <input name="contractVersion" required placeholder="agreement or amendment id"></label>
-    <label class="full">Reference version (chargemaster or fee schedule id, for percent formulas) <input name="referenceVersion"></label>
+    <label>Contract <input name="contractVersion" required placeholder="agreement or amendment id"></label>
+    <label class="full">Chargemaster version (percent-of-charges rates only) <input name="referenceVersion"></label>
     <div class="full"><button class="primary" type="submit">Sign and propose</button> <span id="proposeMsg" class="muted"></span></div>
   </form>
 </section>
 
 <section id="cdm">
-  <p class="note">Providers sign a hash of each chargemaster version. A percent-of-charges rate names the version it applies to, so the amount recomputes from signed inputs.</p>
+  <p class="note">The provider's list prices. The provider signs the hash of each version; a percent-of-charges rate names the version it applies to.</p>
   <form class="grid" id="cdmForm">
-    <label>Version id <input name="version" required placeholder="chargemaster version id"></label>
+    <label>Version <input name="version" required></label>
     <label>Effective <input name="effective" type="date" required></label>
     <label class="full">Chargemaster file <input name="file" type="file" required></label>
     <div class="full"><button class="primary" type="submit">Hash and sign</button> <span id="cdmMsg" class="muted"></span></div>
@@ -59,34 +58,31 @@
 </section>
 
 <section id="keys">
-  <p class="note">The root key is held offline and only delegates or revokes. Signing keys sign rates. Rotation delegates a new key and revokes the old one from now; earlier records stay valid.</p>
+  <p class="note">The root key is held offline and only delegates or revokes signing keys. Rotation revokes the current signing key from now; records it signed earlier stay valid.</p>
   <div id="keysInfo"></div>
   <button class="primary" id="rotateBtn">Rotate signing key</button> <span id="rotateMsg" class="muted"></span>
-  <table style="margin-top:12px"><thead><tr><th>Signing key (public address)</th><th>Not before</th><th>Not after</th><th>Revoked from</th><th>State</th></tr></thead><tbody id="keysBody"></tbody></table>
-</section>
-
-<section id="export">
-  <p class="note">Provider machine-readable file lines for this entity, with a <span class="mono">coral_record_id</span> column that cites the ledger record. A payer file carries the same id per negotiated price.</p>
-  <a id="exportLink" class="primary" style="display:inline-block;text-decoration:none;padding:7px 14px;border-radius:3px;background:#111;color:#fff">Download CSV</a>
-  <pre id="exportPreview"></pre>
+  <table style="margin-top:12px"><thead><tr><th>Signing key</th><th>Valid from</th><th>Revoked from</th><th>State</th></tr></thead><tbody id="keysBody"></tbody></table>
 </section>
 </main>
 <script>
 const $=s=>document.querySelector(s);
 const fmtD=t=>t?new Date(t*1000).toISOString().slice(0,10):'open';
 const fmtT=t=>new Date(t*1000).toISOString().replace('T',' ').slice(0,19);
+const short=a=>a.slice(0,10)+'…';
 let ENTITIES=[], ME=null, EX=null;
 const api=async(p,o)=>{const r=await fetch(p,o);const j=await r.json();if(!r.ok)throw new Error(j.detail||r.statusText);return j;};
 const me=()=>ENTITIES.find(e=>e.id===ME);
+const nameOf=id=>(ENTITIES.find(e=>e.id===id)||{}).name||id;
+const rateText=r=>r.formula==='fixed'?r.valueText:`${r.valueText} of charges`+(r.referenceVersion?` <span class=muted>(${r.referenceVersion})</span>`:'');
 
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('active'));document.querySelectorAll('section').forEach(x=>x.classList.remove('active'));b.classList.add('active');$('#'+b.dataset.tab).classList.add('active');});
 
 async function init(){
   const s=await api('/api/status'); $('#status').textContent=`chain ${s.chainId} · block ${s.block} · ${s.peers} peers`;
   ENTITIES=await api('/api/entities');
-  $('#entity').innerHTML=ENTITIES.map(e=>`<option value="${e.id}">${e.id} — ${e.name}</option>`).join('');
-  $('#providerSel').innerHTML=ENTITIES.filter(e=>e.kind==='provider').map(e=>`<option>${e.id}</option>`).join('');
-  $('#payerSel').innerHTML=ENTITIES.filter(e=>e.kind==='payer').map(e=>`<option>${e.id}</option>`).join('');
+  $('#entity').innerHTML=ENTITIES.map(e=>`<option value="${e.id}">${e.name} (${e.id})</option>`).join('');
+  $('#providerSel').innerHTML=ENTITIES.filter(e=>e.kind==='provider').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  $('#payerSel').innerHTML=ENTITIES.filter(e=>e.kind==='payer').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
   ME=location.hash.slice(1)||ENTITIES[0].id; $('#entity').value=ME;
   $('#entity').onchange=()=>{ME=$('#entity').value;location.hash=ME;refresh();};
   EX=await api('/api/examples');
@@ -95,7 +91,7 @@ async function init(){
     f.providerId.value=EX.providerId;f.payerId.value=EX.payers[r.payer];f.planId.value=r.plan;f.npi.value=EX.npi;f.code.value=r.code;f.modifier.value='';
     f.setting.value=r.setting;f.formula.value=r.formula;f.value.value=r.value.toFixed(2);f.start.value=EX.start;f.end.value='';
     f.contractVersion.value=EX.contractVersion[r.payer];f.referenceVersion.value=r.formula==='fixed'?'':EX.chargemaster.version;
-    $('#exampleNote').textContent=r.description+(r.gross?` · gross ${r.gross.toFixed(2)} → ${r.amount.toFixed(2)}`:'')+' · '+r.methodology;};
+    $('#exampleNote').textContent=r.description+(r.gross?` · list price ${r.gross.toFixed(2)} → ${r.amount.toFixed(2)}`:'')+' · '+r.methodology;};
   $('#cdmForm').version.value=EX.chargemaster.version;
   $('#proposeForm').start.value=new Date().toISOString().slice(0,10);
   $('#cdmForm').effective.value=new Date().toISOString().slice(0,10);
@@ -103,30 +99,30 @@ async function init(){
 }
 
 async function refresh(){
-  const e=me(); $('#entityMeta').textContent=`${e.kind} · root ${e.root.slice(0,10)}… · ${e.signers.length} signing key(s)`;
-  if(e.kind==='provider'){$('#providerSel').value=ME;}else{$('#payerSel').value=ME;}
+  const e=me(); $('#entityMeta').textContent=`${e.kind}${e.npi?' · NPI '+e.npi:''} · ${e.signers.filter(k=>!k.revokedFrom).length} active signing key`;
+  $('#cdmTab').style.display=e.kind==='provider'?'':'none';
+  if(e.kind==='provider'){$('#providerSel').value=ME;$('#proposeForm').npi.value=e.npi;}else{$('#payerSel').value=ME;}
   const q=e.kind==='provider'?`providerId=${ME}`:`payerId=${ME}`;
   const rates=await api('/api/rates?'+q);
-  $('#ratesBody').innerHTML=rates.map(r=>`<tr><td class="mono">${r.id.slice(0,12)}…</td><td>${e.kind==='provider'?r.payerId:r.providerId}</td><td>${r.planId}</td><td class="mono">${r.npi}</td><td>${r.code}</td><td>${r.modifier}</td><td>${r.setting}</td><td>${r.valueText}${r.formula!=='fixed'?' <span class=muted>'+r.formula.replaceAll('_',' ')+(r.referenceVersion?' · '+r.referenceVersion:'')+'</span>':''}</td><td>${fmtD(r.start)} → ${fmtD(r.end)}</td><td>${r.contractVersion}</td><td class="muted">${fmtT(r.committedAt)}</td></tr>`).join('')||'<tr><td colspan=11 class=muted>no signed rates</td></tr>';
+  $('#ratesBody').innerHTML=rates.map(r=>{const other=e.kind==='provider'?r.payerId:r.providerId;
+    return `<tr><td class="mono">${short(r.id)}</td><td>${nameOf(other)}</td><td>${r.planId}</td><td>${r.code}${r.modifier?'-'+r.modifier:''}</td><td>${r.setting}</td><td>${rateText(r)}</td><td>${fmtD(r.start)} → ${fmtD(r.end)}</td><td>${r.contractVersion}</td><td class="mono">${nameOf(r.providerId)} ${short(r.providerSigner)}<br>${nameOf(r.payerId)} ${short(r.payerSigner)}</td></tr>`}).join('')||'<tr><td colspan=9 class=muted>no negotiated rates</td></tr>';
   const pend=await api('/api/pending?entityId='+ME);
   const mine=pend.filter(p=>p.awaiting===ME).length; $('#pendingCount').textContent=mine?`(${mine})`:'';
-  $('#pendingBody').innerHTML=pend.map(p=>{const r=p.rate;const v=r.formula==='fixed'?`$${Number(r.value).toFixed(2)}`:`${r.value}% ${r.formula.replaceAll('_',' ')}`;
-    const act=p.awaiting===ME?`<button class="small" onclick="countersign('${p.id}')">Countersign</button> <button class="small" onclick="reject('${p.id}')">Reject</button>`:`<span class=muted>waiting for ${p.awaiting}</span> <button class="small" onclick="reject('${p.id}')">Withdraw</button>`;
-    return `<tr><td>${p.proposer}</td><td>${p.awaiting}</td><td>${r.planId}</td><td class="mono">${r.npi}</td><td>${r.code}${r.modifier?'-'+r.modifier:''}</td><td>${r.setting}</td><td>${v}</td><td>${r.start} → ${r.end||'open'}</td><td>${r.contractVersion}</td><td>${act}</td></tr>`}).join('')||'<tr><td colspan=10 class=muted>nothing pending</td></tr>';
+  $('#pendingBody').innerHTML=pend.map(p=>{const r=p.rate;const v=r.formula==='fixed'?`$${Number(r.value).toFixed(2)}`:`${r.value}% of charges`;
+    const act=p.awaiting===ME?`<button class="small" onclick="countersign('${p.id}')">Countersign</button> <button class="small" onclick="reject('${p.id}')">Reject</button>`:`<span class=muted>waiting for ${nameOf(p.awaiting)}</span> <button class="small" onclick="reject('${p.id}')">Withdraw</button>`;
+    return `<tr><td>${nameOf(p.proposer)}</td><td>${r.planId}</td><td>${r.code}${r.modifier?'-'+r.modifier:''}</td><td>${r.setting}</td><td>${v}</td><td>${r.start} → ${r.end||'open'}</td><td>${r.contractVersion}</td><td>${act}</td></tr>`}).join('')||'<tr><td colspan=8 class=muted>nothing pending</td></tr>';
   if(e.kind==='provider'){
     const cdm=await api('/api/chargemasters?entityId='+ME);
-    $('#cdmBody').innerHTML=cdm.map(c=>`<tr><td>${c.version}</td><td class="mono">${c.fileHash.slice(0,16)}…</td><td>${fmtD(c.effective)}</td><td class="mono">${c.id.slice(0,12)}…</td></tr>`).join('')||'<tr><td colspan=4 class=muted>none signed</td></tr>';
-  } else { $('#cdmBody').innerHTML='<tr><td colspan=4 class=muted>payers do not sign chargemasters</td></tr>'; }
-  $('#keysInfo').innerHTML=`<p>Entity <b>${e.id}</b> · root key <span class="mono">${e.root}</span></p>`;
+    $('#cdmBody').innerHTML=cdm.map(c=>`<tr><td>${c.version}</td><td class="mono">${c.fileHash.slice(0,16)}…</td><td>${fmtD(c.effective)}</td><td class="mono">${short(c.id)}</td></tr>`).join('')||'<tr><td colspan=4 class=muted>none signed</td></tr>';
+  }
+  $('#keysInfo').innerHTML=`<p>${e.name} · root key <span class="mono">${e.root}</span></p>`;
   const now=Date.now()/1000;
-  $('#keysBody').innerHTML=e.signers.map(k=>{const live=now>=k.notBefore&&(!k.notAfter||now<k.notAfter)&&(!k.revokedFrom||now<k.revokedFrom);return `<tr><td class="mono">${k.signer}</td><td>${fmtT(k.notBefore)}</td><td>${k.notAfter?fmtT(k.notAfter):'—'}</td><td>${k.revokedFrom?fmtT(k.revokedFrom):'—'}</td><td class="${live?'ok':'bad'}">${live?'active':'inactive'}</td></tr>`}).join('');
-  $('#exportLink').href='/api/export/mrf?entityId='+ME;
-  if(e.kind==='provider'){$('#exportPreview').textContent=await (await fetch('/api/export/mrf?entityId='+ME)).text();}else{$('#exportPreview').textContent='Payer export (TiC in-network JSON with record ids) is not built yet.';}
+  $('#keysBody').innerHTML=e.signers.map(k=>{const live=now>=k.notBefore&&(!k.notAfter||now<k.notAfter)&&(!k.revokedFrom||now<k.revokedFrom);return `<tr><td class="mono">${k.signer}</td><td>${fmtT(k.notBefore)}</td><td>${k.revokedFrom?fmtT(k.revokedFrom):'—'}</td><td class="${live?'ok':'bad'}">${live?'active':'revoked'}</td></tr>`}).join('');
 }
 
 $('#proposeForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);const body=Object.fromEntries(f.entries());body.value=Number(body.value);
-  try{const p=await api('/api/propose?entityId='+ME,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});$('#proposeMsg').textContent=`signed; record id ${p.rateId.slice(0,14)}… awaits ${p.awaiting}`;ENTITIES=await api('/api/entities');refresh();}catch(e){$('#proposeMsg').textContent=e.message;$('#proposeMsg').className='bad';}};
-window.countersign=async id=>{try{const r=await api(`/api/countersign?entityId=${ME}&pendingId=${id}`,{method:'POST'});alert(`committed ${r.id}`);refresh();}catch(e){alert(e.message);}};
+  try{const p=await api('/api/propose?entityId='+ME,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});$('#proposeMsg').className='muted';$('#proposeMsg').textContent=`signed; waits for ${nameOf(p.awaiting)} to countersign`;refresh();}catch(e){$('#proposeMsg').textContent=e.message;$('#proposeMsg').className='bad';}};
+window.countersign=async id=>{try{await api(`/api/countersign?entityId=${ME}&pendingId=${id}`,{method:'POST'});refresh();}catch(e){alert(e.message);}};
 window.reject=async id=>{await api(`/api/reject?entityId=${ME}&pendingId=${id}`,{method:'POST'});refresh();};
 $('#cdmForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);f.append('entityId',ME);try{const r=await api('/api/chargemaster',{method:'POST',body:f});$('#cdmMsg').textContent=`signed ${r.version} sha256 ${r.sha256.slice(0,16)}… (${r.bytes} bytes)`;refresh();}catch(e){$('#cdmMsg').textContent=e.message;}};
 $('#rotateBtn').onclick=async()=>{try{const r=await api('/api/keys/rotate?entityId='+ME,{method:'POST'});$('#rotateMsg').textContent='new signing key '+r.newSigner;ENTITIES=await api('/api/entities');refresh();}catch(e){$('#rotateMsg').textContent=e.message;}};

@@ -25,10 +25,10 @@ KEYS_FILE = DEPLOY_FILE.parent / "keys.json"
 # Real entities from the UCHealth Yampa Valley Medical Center price file (2025-11-01):
 # TIN from the file name, type 2 NPI from the file header, payer names as written in the file.
 ENTITIES = [
-    # id, kind, display name
-    ("TIN:84-0398876", "provider", "UCHealth Yampa Valley Medical Center (NPI 1790787307)"),
-    ("PAYER:UHC", "payer", "United Healthcare"),
-    ("PAYER:AETNA", "payer", "Aetna"),
+    # id, kind, name as written in the file, type 2 NPI (providers only)
+    ("TIN:84-0398876", "provider", "UCHealth Yampa Valley Medical Center", "1790787307"),
+    ("PAYER:UHC", "payer", "United Healthcare", ""),
+    ("PAYER:AETNA", "payer", "Aetna", ""),
 ]
 
 
@@ -45,12 +45,12 @@ def main():
 
     keys = {"registrar": {"address": registrar, "key": RELAYER_KEY}, "entities": {}}
     now = int(time.time())
-    for eid, kind, name in ENTITIES:
+    for eid, kind, name, npi in ENTITIES:
         root, signer = Account.create(), Account.create()
         ch.register_entity(eid, kind, root.address, registrar)
         ch.delegate(root.key, eid, signer.address, now - 60)
         keys["entities"][eid] = {
-            "kind": kind, "name": name,
+            "kind": kind, "name": name, "npi": npi,
             "root": {"address": root.address, "key": root.key.hex()},
             "signer": {"address": signer.address, "key": signer.key.hex()},
         }
