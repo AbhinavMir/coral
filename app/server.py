@@ -25,11 +25,12 @@ from pydantic import BaseModel
 from coral.chain import Chain, DEPLOY_FILE
 from coral.typed import Rate, ChargemasterVersion, sign_rate, SETTING_NAME, FORMULA_NAME, FORMULA, SETTING
 from coral.verify import Line, verify_line
-from coral.mrf import provider_csv, provider_header, payer_json
+from coral.mrf import provider_csv, provider_header, payer_json, gross_charges
 
 ROOT = Path(__file__).resolve().parent
 KEYS_FILE = DEPLOY_FILE.parent / "keys.json"
 PENDING_FILE = DEPLOY_FILE.parent / "pending.json"
+CDM_DIR = DEPLOY_FILE.parent / "chargemasters"   # signed chargemaster files, named by SHA-256
 RELAYER_KEY = "0xae6ae8e5ccbfb04590405997ee2d52d2b330726137b875053c36d94e974d162f"
 
 app = FastAPI(title="CORAL")
@@ -57,9 +58,35 @@ def _sign_for(eid: str, rate: Rate) -> bytes:
     return sign_rate(_entity(eid)["signer"]["key"], chain.domain, rate)
 
 
+_gross_cache: dict[str, dict] = {}
+
+
+def _gross_index(file_hash: str) -> dict | None:
+    """List prices from the signed chargemaster file with this hash, if the server holds the file."""
+    if file_hash not in _gross_cache:
+        f = CDM_DIR / file_hash
+        _gross_cache[file_hash] = gross_charges(f) if f.exists() else None
+    return _gross_cache[file_hash]
+
+
+def _list_price(rec) -> int | None:
+    """List price in cents that a percent-of-charges record applies to, from the chargemaster version it names."""
+    r = rec.rate
+    if r.formula != 1 or not r.referenceVersion:
+        return None
+    for c in chain.chargemasters_for(r.providerId):
+        if c["version"] == r.referenceVersion:
+            idx = _gross_index(c["fileHash"].hex())
+            return idx.get((r.code, r.setting)) if idx else None
+    return None
+
+
 def _rate_json(rec) -> dict:
     r = rec.rate
+    gross = _list_price(rec)
     return {
+        "listPriceCents": gross,
+        "amountCents": r.value if r.formula == 0 else (round(gross * r.value / 10000) if gross is not None else None),
         "id": "0x" + rec.id.hex(), "committedAt": rec.committed_at,
         "providerSigner": rec.provider_signer, "payerSigner": rec.payer_signer,
         "payerId": r.payerId, "planId": r.planId, "providerId": r.providerId, "npi": r.npi,
@@ -200,6 +227,9 @@ async def chargemaster(entityId: str = Form(...), version: str = Form(...), effe
     cm = ChargemasterVersion(entityId, version, hashlib.sha256(data).digest(),
                              int(time.mktime(time.strptime(effective, "%Y-%m-%d"))))
     cid = chain.commit_chargemaster(cm, e["signer"]["key"])
+    CDM_DIR.mkdir(exist_ok=True)
+    (CDM_DIR / cm.fileHash.hex()).write_bytes(data)
+    _gross_cache.pop(cm.fileHash.hex(), None)
     return {"id": "0x" + cid.hex(), "version": version, "sha256": cm.fileHash.hex(), "bytes": len(data)}
 
 

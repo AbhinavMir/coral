@@ -35,6 +35,14 @@ def main():
     pkey = keys["entities"][ex["providerId"]]["signer"]["key"]
 
     cm = ex["chargemaster"]
+    src = ROOT / "data" / "raw" / "840398876_yampa-valley-medical-center_standardcharges.csv"
+    if src.exists():
+        # the app reads list prices from the signed file, stored by its hash
+        cdm_dir = DEPLOY_FILE.parent / "chargemasters"
+        cdm_dir.mkdir(exist_ok=True)
+        (cdm_dir / cm["sha256"]).write_bytes(src.read_bytes())
+    else:
+        print(f"{src} not present; percent-of-charges amounts will show without a list price")
     cm_id = ch.commit_chargemaster(
         ChargemasterVersion(ex["providerId"], cm["version"], bytes.fromhex(cm["sha256"]), day(cm["effective"])), pkey)
     print(f"chargemaster {cm['version']} -> {cm_id.hex()[:16]}")

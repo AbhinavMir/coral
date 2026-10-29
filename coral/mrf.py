@@ -155,3 +155,32 @@ def payer_json(path: Path, payer_id: str, plan_id: str, provider_map: dict[str, 
                             amount_cents=cents(rate) if ntype in ("negotiated", "fee schedule", "derived") else None,
                             percent_bp=bp(rate) if ntype == "percentage" else None,
                         )
+
+
+def gross_charges(path: Path) -> dict[tuple[str, int], int]:
+    """(code, setting) -> list price in cents, from the standard_charge|gross column of a CMS v2 tall CSV.
+
+    The gross charge does not depend on the payer, so the first non-empty value per code and
+    setting is taken. Rows with setting "both" fill both settings.
+    """
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    lines = text.splitlines()
+    start = next(i for i, ln in enumerate(lines[:10]) if "code|1" in ln)
+    out: dict[tuple[str, int], int] = {}
+    for row in csv.DictReader(io.StringIO("\n".join(lines[start:]))):
+        g = cents(row.get("standard_charge|gross"))
+        if g is None:
+            continue
+        code = None
+        for n in range(1, 5):
+            c = row.get(f"code|{n}", "").strip()
+            t = row.get(f"code|{n}|type", "").strip().upper()
+            if c and t in ("CPT", "HCPCS", "MS-DRG", "DRG", "APR-DRG"):
+                code = f"{t}:{c}"
+                break
+        if not code:
+            continue
+        setting = _setting(row.get("setting", ""))
+        for st in ([1, 2] if setting is None else [setting]):
+            out.setdefault((code, st), g)
+    return out
