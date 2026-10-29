@@ -32,8 +32,13 @@ pre { background:var(--soft); padding:8px; overflow:auto; font-size:12px; }
 .role select { font:inherit; padding:5px; }
 .search { display:flex; gap:12px; align-items:center; margin:8px 0; }
 .search input { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:3px; width:480px; max-width:100%; }
-th.sort { cursor:pointer; user-select:none; }
-th.sort.on { text-decoration:underline; }
+.list { list-style:none; margin:0; padding:0; }
+.list li { display:grid; grid-template-columns:150px 90px 1fr 120px 130px; gap:12px; align-items:start; padding:8px 0; border-bottom:1px solid var(--line); }
+.list .code { font-weight:600; }
+.list .amt { text-align:right; font-variant-numeric:tabular-nums; }
+.list details { grid-column:1 / -1; font-size:12px; margin-top:-4px; }
+.list summary { cursor:pointer; font-family:ui-monospace, monospace; }
+.list details div { margin-top:4px; line-height:1.6; }
 .spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--line); border-top-color:var(--fg); border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .loading { position:fixed; inset:0; display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; background:rgba(255,255,255,.85); color:var(--muted); font-size:13px; z-index:10; }

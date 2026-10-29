@@ -15,7 +15,7 @@
   <p class="note">Every rate on the ledger. Both parties signed each row; the record id is what the published files cite.</p>
   <div class="search"><input id="q" type="search" placeholder="Search, e.g. aetna inpatient percent" autofocus><span class="muted" id="ratesCount"></span></div>
   <div class="loading" id="ratesLoading"><span class="spinner"></span>Reading the ledger…</div>
-  <table><thead id="ratesHead"></thead><tbody id="ratesBody"></tbody></table>
+  <ul class="list" id="ratesList"></ul>
 </section>
 
 <section id="pending">
@@ -106,17 +106,16 @@ async function init(){
   refresh();
 }
 
-const COLS=[['id','Record',r=>short(r.id),'mono'],['providerId','Provider',r=>nameOf(r.providerId)],['payerId','Payer',r=>nameOf(r.payerId)],['planId','Plan',r=>r.planId],['code','Code',r=>r.code+(r.modifier?'-'+r.modifier:'')],['setting','Setting',r=>r.setting],['value','Rate',rateText],['start','Effective',r=>fmtD(r.start)+' → '+fmtD(r.end)],['contractVersion','Contract',r=>r.contractVersion],['providerSigner','Signed by',r=>short(r.providerSigner)+'<br>'+short(r.payerSigner),'mono']];
-let SORT={key:'committedAt',dir:-1};
-function matches(r,q){if(!q)return true;const hay=[r.id,nameOf(r.providerId),nameOf(r.payerId),r.planId,r.code,r.contractVersion,r.referenceVersion,r.setting,r.formula==='fixed'?'fixed':'percent'].join(' ').toLowerCase();return q.split(/\s+/).every(t=>hay.includes(t));}
 function drawRates(){
   const q=$('#q').value.trim().toLowerCase();
-  let rows=RATES.filter(r=>matches(r,q));
-  rows.sort((a,b)=>{const x=a[SORT.key],y=b[SORT.key];return (x<y?-1:x>y?1:0)*SORT.dir;});
-  $('#ratesCount').textContent=`${rows.length} of ${RATES.length} records`;
-  $('#ratesHead').innerHTML='<tr>'+COLS.map(([k,label])=>`<th class="sort${SORT.key===k?' on':''}" data-k="${k}">${label}${SORT.key===k?(SORT.dir>0?' ↑':' ↓'):''}</th>`).join('')+'</tr>';
-  document.querySelectorAll('th.sort').forEach(h=>h.onclick=()=>{const k=h.dataset.k;SORT=SORT.key===k?{key:k,dir:-SORT.dir}:{key:k,dir:1};drawRates();});
-  $('#ratesBody').innerHTML=rows.map(r=>'<tr>'+COLS.map(([,,f,cls])=>`<td${cls?' class="'+cls+'"':''}>${f(r)}</td>`).join('')+'</tr>').join('')||'<tr><td colspan=10 class=muted>no records match</td></tr>';
+  const rows=RATES.filter(r=>matches(r,q));
+  $('#ratesCount').textContent=`${rows.length} of ${RATES.length}`;
+  $('#ratesList').innerHTML=rows.map(r=>`<li>
+    <span class="code">${r.code}${r.modifier?'-'+r.modifier:''}</span><span class="muted">${r.setting}</span>
+    <span>${nameOf(r.providerId)} · ${nameOf(r.payerId)} · ${r.planId}</span>
+    <span class="amt">${rateText(r)}</span>
+    <details><summary class="muted">${short(r.id)}</summary><div class="mono muted">record ${r.id}<br>effective ${fmtD(r.start)} → ${fmtD(r.end)} · ${r.contractVersion}<br>provider signer ${r.providerSigner}<br>payer signer ${r.payerSigner}<br>committed ${fmtT(r.committedAt)}</div></details>
+  </li>`).join('')||'<li class="muted">no records match</li>';
 }
 
 async function refreshCdm(){
