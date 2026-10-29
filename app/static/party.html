@@ -14,14 +14,14 @@
 <section id="rates" class="active">
   <p class="note">Every rate on the ledger. Both parties signed each row; the record id is what the published files cite.</p>
   <div class="search"><input id="q" type="search" placeholder="Search code, plan, provider, payer, contract, or record id" autofocus><span class="muted" id="ratesCount"></span></div>
-  <div class="facets" id="facets"></div>
+  <p class="filters"><label>Payer <select id="fPayer"><option value="">all</option></select></label> <label>Plan <select id="fPlan"><option value="">all</option></select></label> <label>Setting <select id="fSetting"><option value="">all</option><option>inpatient</option><option>outpatient</option><option>professional</option></select></label> <label>Formula <select id="fFormula"><option value="">all</option><option value="fixed">fixed dollar</option><option value="percent_of_charges">percent of charges</option></select></label></p>
   <div class="loading" id="ratesLoading"><span class="spinner"></span>Reading the ledger…</div>
   <table><thead id="ratesHead"></thead><tbody id="ratesBody"></tbody></table>
 </section>
 
 <section id="pending">
   <p class="note">Proposals signed by one party and waiting for the other. Countersigning puts both signatures on the ledger in one transaction.</p>
-  <div class="facet"><span class="muted">Sign as</span><span id="entityPills"></span><span class="muted">(prototype: this server holds every signing key)</span></div>
+  <p><label>Sign as <select id="entity"></select></label> <span class="muted">(prototype: this server holds every signing key)</span></p>
   <table><thead><tr><th>Proposed by</th><th>Plan</th><th>Code</th><th>Setting</th><th>Rate</th><th>Effective</th><th>Contract</th><th></th></tr></thead><tbody id="pendingBody"></tbody></table>
 </section>
 
@@ -47,7 +47,7 @@
 </section>
 
 <section id="cdm">
-  <div class="facet"><span class="muted">Provider</span><span id="cdmPills"></span></div>
+  <p><label>Provider <select id="cdmEntity"></select></label></p>
   <p class="note">The provider's list prices. The provider signs the hash of each version; a percent-of-charges rate names the version it applies to.</p>
   <form class="grid" id="cdmForm">
     <label>Version <input name="version" required></label>
@@ -59,7 +59,7 @@
 </section>
 
 <section id="keys">
-  <div class="facet"><span class="muted">Entity</span><span id="keysPills"></span></div>
+  <p><label>Entity <select id="keysEntity"></select></label></p>
   <p class="note">The root key is held offline and only delegates or revokes signing keys. Rotation revokes the current signing key from now; records it signed earlier stay valid.</p>
   <div id="keysInfo"></div>
   <button class="primary" id="rotateBtn">Rotate signing key</button> <span id="rotateMsg" class="muted"></span>
@@ -71,7 +71,7 @@ const $=s=>document.querySelector(s);
 const fmtD=t=>t?new Date(t*1000).toISOString().slice(0,10):'open';
 const fmtT=t=>new Date(t*1000).toISOString().replace('T',' ').slice(0,19);
 const short=a=>a.slice(0,10)+'…';
-let ENTITIES=[], ME=null, CDM=null, EX=null, RATES=[];
+let ENTITIES=[], ME=null, EX=null, RATES=[];
 const api=async(p,o)=>{const r=await fetch(p,o);const j=await r.json();if(!r.ok)throw new Error(j.detail||r.statusText);return j;};
 const me=()=>ENTITIES.find(e=>e.id===ME);
 const nameOf=id=>(ENTITIES.find(e=>e.id===id)||{}).name||id;
@@ -85,12 +85,18 @@ async function init(){
   ENTITIES=await api('/api/entities');
   const provOpts=ENTITIES.filter(e=>e.kind==='provider').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
   const payerOpts=ENTITIES.filter(e=>e.kind==='payer').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
-  $('#providerSel').innerHTML=provOpts; $('#payerSel').innerHTML=payerOpts;
-  ME=location.hash.slice(1)||ENTITIES[0].id;
-  CDM=ENTITIES.find(e=>e.kind==='provider').id;
-  drawPills();
+  const allOpts=ENTITIES.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  $('#providerSel').innerHTML=provOpts; $('#payerSel').innerHTML=payerOpts; $('#cdmEntity').innerHTML=provOpts;
+  $('#entity').innerHTML=allOpts; $('#keysEntity').innerHTML=allOpts; $('#fPayer').innerHTML+=payerOpts;
+  ME=location.hash.slice(1)||ENTITIES[0].id; $('#entity').value=ME; $('#keysEntity').value=ME;
+  $('#entity').onchange=()=>{ME=$('#entity').value;location.hash=ME;$('#keysEntity').value=ME;refresh();};
+  $('#keysEntity').onchange=()=>{$('#entity').value=$('#keysEntity').value;$('#entity').onchange();};
+  $('#cdmEntity').onchange=refreshCdm;
+  $('#fPayer').onchange=$('#fPlan').onchange=$('#fSetting').onchange=$('#fFormula').onchange=drawRates;
   $('#q').oninput=drawRates;
-  RATES=await api('/api/rates'); $('#ratesLoading').remove(); drawRates();
+  RATES=await api('/api/rates'); $('#ratesLoading').remove();
+  $('#fPlan').innerHTML+=[...new Set(RATES.map(r=>r.planId))].sort().map(v=>`<option>${v}</option>`).join('');
+  drawRates();
   EX=await api('/api/examples');
   $('#exampleSel').innerHTML='<option value="">—</option>'+EX.rates.map((r,i)=>`<option value="${i}">${r.code} ${r.setting} · ${r.payer} / ${r.plan} · ${r.formula==='fixed'?'$'+r.value.toFixed(2):r.value.toFixed(2)+'% of charges'}</option>`).join('');
   $('#exampleSel').onchange=()=>{const r=EX.rates[$('#exampleSel').value];if(!r)return;const f=$('#proposeForm');
@@ -104,28 +110,12 @@ async function init(){
   refresh();
 }
 
-const FACETS=[['providerId','Provider',r=>nameOf(r.providerId)],['payerId','Payer',r=>nameOf(r.payerId)],['planId','Plan',r=>r.planId],['setting','Setting',r=>r.setting],['formula','Formula',r=>r.formula==='fixed'?'fixed dollar':'percent of charges']];
 const COLS=[['id','Record',r=>short(r.id),'mono'],['providerId','Provider',r=>nameOf(r.providerId)],['payerId','Payer',r=>nameOf(r.payerId)],['planId','Plan',r=>r.planId],['code','Code',r=>r.code+(r.modifier?'-'+r.modifier:'')],['setting','Setting',r=>r.setting],['value','Rate',rateText],['start','Effective',r=>fmtD(r.start)+' → '+fmtD(r.end)],['contractVersion','Contract',r=>r.contractVersion],['providerSigner','Signed by',r=>short(r.providerSigner)+'<br>'+short(r.payerSigner),'mono']];
-let SEL={}, SORT={key:'committedAt',dir:-1};
+let SORT={key:'committedAt',dir:-1};
 function matches(r,q){if(!q)return true;const hay=[r.id,nameOf(r.providerId),nameOf(r.payerId),r.planId,r.code,r.contractVersion,r.referenceVersion,r.setting].join(' ').toLowerCase();return q.split(/\s+/).every(t=>hay.includes(t));}
-function pills(el,list,sel,on){el.innerHTML=list.map(e=>`<button class="chip${e.id===sel?' on':''}" data-id="${e.id}">${e.name}</button>`).join('');el.querySelectorAll('.chip').forEach(b=>b.onclick=()=>on(b.dataset.id));}
-function drawPills(){
-  pills($('#entityPills'),ENTITIES,ME,id=>{ME=id;location.hash=id;drawPills();refresh();});
-  pills($('#keysPills'),ENTITIES,ME,id=>{ME=id;location.hash=id;drawPills();refresh();});
-  pills($('#cdmPills'),ENTITIES.filter(e=>e.kind==='provider'),CDM,id=>{CDM=id;drawPills();refreshCdm();});
-}
 function drawRates(){
-  const q=$('#q').value.trim().toLowerCase();
-  const base=RATES.filter(r=>matches(r,q));
-  // facet counts are computed with every other facet applied, so a count says how many rows the click will leave
-  $('#facets').innerHTML=FACETS.map(([k,label,f])=>{
-    const others=base.filter(r=>FACETS.every(([k2,,f2])=>k2===k||!SEL[k2]||f2(r)===SEL[k2]));
-    const counts={};others.forEach(r=>{const v=f(r);counts[v]=(counts[v]||0)+1;});
-    const vals=Object.keys(counts).sort();
-    if(vals.length<2&&!SEL[k])return '';
-    return `<div class="facet"><span class="muted">${label}</span>`+vals.map(v=>`<button class="chip${SEL[k]===v?' on':''}" data-k="${k}" data-v="${v.replace(/"/g,'&quot;')}">${v} <span class="muted">${counts[v]}</span></button>`).join('')+`</div>`;}).join('');
-  document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const k=b.dataset.k,v=b.dataset.v;SEL[k]=SEL[k]===v?undefined:v;drawRates();});
-  let rows=base.filter(r=>FACETS.every(([k,,f])=>!SEL[k]||f(r)===SEL[k]));
+  const q=$('#q').value.trim().toLowerCase(), fp=$('#fPayer').value, fl=$('#fPlan').value, fs=$('#fSetting').value, ff=$('#fFormula').value;
+  let rows=RATES.filter(r=>matches(r,q)&&(!fp||r.payerId===fp)&&(!fl||r.planId===fl)&&(!fs||r.setting===fs)&&(!ff||r.formula===ff));
   rows.sort((a,b)=>{const x=a[SORT.key],y=b[SORT.key];return (x<y?-1:x>y?1:0)*SORT.dir;});
   $('#ratesCount').textContent=`${rows.length} of ${RATES.length} records`;
   $('#ratesHead').innerHTML='<tr>'+COLS.map(([k,label])=>`<th class="sort${SORT.key===k?' on':''}" data-k="${k}">${label}${SORT.key===k?(SORT.dir>0?' ↑':' ↓'):''}</th>`).join('')+'</tr>';
@@ -134,7 +124,7 @@ function drawRates(){
 }
 
 async function refreshCdm(){
-  const id=CDM;
+  const id=$('#cdmEntity').value;
   const cdm=await api('/api/chargemasters?entityId='+id);
   $('#cdmBody').innerHTML=cdm.map(c=>`<tr><td>${c.version}</td><td class="mono">${c.fileHash.slice(0,16)}…</td><td>${fmtD(c.effective)}</td><td class="mono">${short(c.id)}</td></tr>`).join('')||'<tr><td colspan=4 class=muted>none signed</td></tr>';
 }
@@ -157,7 +147,7 @@ $('#proposeForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(e
   try{const p=await api('/api/propose?entityId='+ME,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});$('#proposeMsg').className='muted';$('#proposeMsg').textContent=`signed as ${nameOf(p.proposer)}; waits for ${nameOf(p.awaiting)} to countersign`;refresh();}catch(e){$('#proposeMsg').textContent=e.message;$('#proposeMsg').className='bad';}};
 window.countersign=async id=>{const b=event.target;b.disabled=true;b.innerHTML='<span class="spinner"></span>';try{await api(`/api/countersign?entityId=${ME}&pendingId=${id}`,{method:'POST'});RATES=await api('/api/rates');drawRates();refresh();}catch(e){alert(e.message);refresh();}};
 window.reject=async id=>{await api(`/api/reject?entityId=${ME}&pendingId=${id}`,{method:'POST'});refresh();};
-$('#cdmForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);f.append('entityId',CDM);try{const r=await api('/api/chargemaster',{method:'POST',body:f});$('#cdmMsg').textContent=`signed ${r.version} sha256 ${r.sha256.slice(0,16)}… (${r.bytes} bytes)`;refresh();}catch(e){$('#cdmMsg').textContent=e.message;}};
+$('#cdmForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);f.append('entityId',$('#cdmEntity').value);try{const r=await api('/api/chargemaster',{method:'POST',body:f});$('#cdmMsg').textContent=`signed ${r.version} sha256 ${r.sha256.slice(0,16)}… (${r.bytes} bytes)`;refresh();}catch(e){$('#cdmMsg').textContent=e.message;}};
 $('#rotateBtn').onclick=async()=>{try{const r=await api('/api/keys/rotate?entityId='+ME,{method:'POST'});$('#rotateMsg').textContent='new signing key '+r.newSigner;ENTITIES=await api('/api/entities');refresh();}catch(e){$('#rotateMsg').textContent=e.message;}};
 init();
 </script>
