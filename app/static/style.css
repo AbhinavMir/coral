@@ -41,4 +41,5 @@ th.sort { cursor:pointer; user-select:none; }
 th.sort.on { text-decoration:underline; }
 .spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--line); border-top-color:var(--fg); border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; }
 @keyframes spin { to { transform:rotate(360deg); } }
-.loading { color:var(--muted); font-size:13px; padding:24px 0; }
+.loading { position:fixed; inset:0; display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; background:rgba(255,255,255,.85); color:var(--muted); font-size:13px; z-index:10; }
+.loading .spinner { width:28px; height:28px; border-width:3px; }
