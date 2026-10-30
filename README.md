@@ -4,9 +4,9 @@ A permissioned ledger on which a provider and a payer jointly sign each
 negotiated rate. Published price files cite the record id, so a
 line that departs from the signed rate is detected by anyone with the file.
 
-Paper: `abstract.tex` (AMIA format). Findings: `NOTES.md`.
+Paper and all working notes: `abstract.tex` (AMIA format).
 
-## State (2026-10-27)
+## State (2026-10-30)
 
 | Part | State |
 |---|---|
@@ -41,7 +41,7 @@ Evaluation on a real provider file:
   --plan-name "Broad Networks" --payer PAYER:UHC --plan "Broad Networks" -n 200
 ```
 
-Hospital files are found through `https://<hospital domain>/cms-hpt.txt`.
+Provider files are found through `https://<provider domain>/cms-hpt.txt`.
 
 ## Layout
 

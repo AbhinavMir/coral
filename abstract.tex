@@ -25,70 +25,149 @@
 \end{center}
 
 \section*{Abstract}
-\textit{Providers and payers each publish their negotiated rates. A 2026 comparison of 450 hospitals and two payers found about one in ten paired rates match exactly and about half fall within 10 percent. Each file is published by one party without the other's confirmation. CORAL is a permissioned ledger on which a provider and a payer jointly sign each negotiated rate with its plan, code, modifier, setting, formula, dates, and contract version. Providers sign chargemaster versions, so percentage rates recompute from signed inputs. Machine-readable files and X12 837 and 835 reference segments cite the record identifier, so a claim priced against a missing or expired rate is detected at remittance. We implement CORAL on Hyperledger Besu and evaluate it on public provider and payer files, reporting disagreement before and after signing, the party responsible for each remaining difference, and cost per contract.}
+\textit{Providers and payers each publish their negotiated rates. A 2026 comparison of 450 hospitals and two payers found about one in ten paired rates match exactly and about half fall within 10 percent. Each file is published by one party without the other's confirmation. CORAL is a permissioned ledger on which a provider and a payer jointly sign each negotiated rate with its plan, code, modifier, setting, formula, dates, and contract version. Providers sign chargemaster versions, so percentage rates recompute from signed inputs. Published machine-readable files cite the record identifier, so a line that departs from the signed rate is detected by anyone who holds the file. We implement CORAL on Hyperledger Besu and evaluate it on public provider and payer files, reporting disagreement before and after signing, the party responsible for each remaining difference, and cost per contract.}
 
 \section*{Working notes (remove before submission)}
 
+Everything built for this paper is recorded here. Dates are absolute. Numbers come from runs in the repository (\url{https://github.com/AbhinavMir/coral}) unless a source is named. Say provider, not hospital, except in a regulation name or a cited study.
+
 \textbf{Problem}
 \begin{itemize}
-\item Hospitals publish negotiated rates under the CMS Hospital Price Transparency rule (45 CFR 180). Payers publish in-network rates under the Transparency in Coverage rule. Each file is produced by one party. No file carries the other party's signature.
-\item Trilliant Health, 30 April 2026: 450 hospitals, Aetna and UnitedHealthcare, 16 codes, data from August 2025. Exact match: 9.0\% inpatient, 10.8\% GI, 11.7\% orthopedic. Within 10\%: 50.8\%, 41.7\%, 47.4\%. More than 50\% apart: 17.9\% for inpatient and GI.
-\item The comparison cannot say which file is correct. Neither file links a published line to a contract version or an effective date.
-\item Rates are formulas, not constants: fixed amount, percent of charges, or percent of a reference fee schedule. A percent-of-charges rate changes when the chargemaster changes. The chargemaster is per provider and versioned. The payer does not sign it.
+\item Providers publish negotiated rates under 45 CFR 180 (the Hospital Price Transparency rule). Payers publish in-network rates under the Transparency in Coverage rule (85 FR 72158). Each file is produced by one party. No file carries the other party's signature.
+\item Trilliant Health, 30 April 2026: 450 hospitals, Aetna and UnitedHealthcare, 16 codes, data from August 2025. Exact match 9.0\% inpatient, 10.8\% GI, 11.7\% orthopedic. Within 10\%: 50.8\%, 41.7\%, 47.4\%. More than 50\% apart: 17.9\% for inpatient and GI.
+\item The comparison cannot say which file is correct. Neither file links a line to a contract version, an effective date, or the other party.
+\item Rates are formulas: a fixed amount, a percent of billed charges, or a percent of a reference fee schedule. In the one real provider file profiled (UCHealth Yampa Valley Medical Center, file dated 2025-11-01, CMS format 3.0.0): 633,324 rows, 454,793 with a dollar amount, 228,164 (36\%) percent of total billed charges, 30 payer/plan pairs, one type 2 NPI in the header (1790787307). A percent-of-charges line changes value when the chargemaster changes. The payer does not sign the chargemaster.
+\end{itemize}
+
+\textbf{Terms}
+\begin{itemize}
+\item Negotiated rate: the price a provider and a payer agreed for one code. Contractual. The CMS file calls it the payer-specific negotiated charge.
+\item Chargemaster: the provider's list price for every item. Set by the provider alone, not negotiated. The CMS file calls it the gross charge. A percent-of-charges rate is a percent of this number, so the contract fixes the percent and the provider fixes the base.
+\item Setting: inpatient (admitted) or outpatient (not admitted). The same CPT or HCPCS code is often paid differently in each. Admissions as a whole are priced under MS-DRG codes, which exist only for inpatient stays. The CMS file has a setting column with the values inpatient, outpatient, and both; the record adds professional.
+\item Fields that identify one rate: payer, plan, billing NPI, code, modifier, setting, and date. Two rates equal on all of these are the same rate.
+\item In the CMS file format but not in the record: drug unit of measure (per mg, per mL, per unit) and billing class (facility or professional). Gap: a per-mg rate and a per-vial rate for one HCPCS code are different rates and the record cannot tell them apart. To add.
+\item In contracts but in neither the file nor the record: place of service beyond the setting split, revenue code, bundling rules, multiple-procedure reductions, outlier and stop-loss terms, carve-outs, per-diem tiers, annual escalators. The rule requires a rate per code, not the rules for combining codes on a claim. Out of scope: the paper checks the published line.
 \end{itemize}
 
 \textbf{Prior art}
 \begin{itemize}
-\item No paper or product found on jointly signed negotiated rates or on a ledger that holds rate records (six searches, 27 October 2026).
-\item Status-on-chain claim networks exist: Change Healthcare Hyperledger Fabric claims network (2018), Avaneer Health, Synaptic Health Alliance (provider directory). MediLedger 340B working group (2021). None holds the rate itself with both signatures.
-\item Transparency logs (Certificate Transparency, Trillian, SCITT) give append-only with one operator. A ledger is justified only when the parties distrust each other and no neutral operator is accepted; cite the three-condition test from the blockchain-health position paper. Equivocation detection: PeerReview (SOSP 2007), SUNDR fork consistency. arXiv 2308.04781: an append on a chain is not proof that the counterparty received it.
+\item No paper or product found on jointly signed negotiated rates or a ledger that holds rate records (six searches, 27 October 2026).
+\item Claim-status networks on a ledger exist: Change Healthcare on Hyperledger Fabric (2018), Avaneer Health, Synaptic Health Alliance (provider directory), MediLedger 340B working group (2021). None holds the rate with both signatures.
+\item Transparency logs (Certificate Transparency, Trillian, SCITT) are append-only under one operator. A ledger with several validators is justified only when the parties distrust each other and accept no single operator. Cite the three-condition test from the blockchain-health position paper. Equivocation detection: PeerReview (SOSP 2007), SUNDR fork consistency. arXiv 2308.04781: an append on a chain is not proof the counterparty received it.
 \item FHIR Provenance, W3C PROV, C2PA, HL7 AI Transparency on FHIR cover record provenance, not contract terms.
+\end{itemize}
+
+\textbf{What is new}
+\begin{itemize}
+\item One record, one hash, two signatures. A provider and a payer sign the same rate before either publishes it. No existing network does this.
+\item A record id that both published files and an X12 claim can carry. Verification of a file is a lookup, not a comparison of two files.
+\item A mismatch between the two public files resolves to ``provider file departs'' or ``payer file departs''. Today it resolves to nothing.
+\item Percent-of-charges rates become checkable: the provider signs the chargemaster version, the rate names it, the amount recomputes from signed inputs.
+\item Key validity judged at commit time, so a rotated key does not invalidate old records.
+\item The ledger is not the novelty. It is the neutral place to timestamp the record when CMS, providers, and payers accept no one of the others as operator.
+\end{itemize}
+
+\textbf{Keys: identity roots}
+\begin{itemize}
+\item Provider contracting entity: the tax identification number (TIN). Contracts are signed at the TIN. A TIN covers one or more type 2 NPIs. CMS binds NPIs to organizations through NPPES and PECOS and authorizes staff through the Identity \& Access Management System.
+\item Payer entity: a payer id. Candidates: the HIOS issuer id (used in Transparency in Coverage files), the NAIC company code, or the X12 payer id. The prototype uses an opaque string.
+\item Registrar: CMS. CMS receives both files and proofs both kinds of organization. CMS binds an entity id to a root public key once, after out-of-band proofing. CMS never signs a rate.
+\item Entity ids in the prototype: \texttt{TIN:84-0398876} (UCHealth Yampa Valley Medical Center, TIN from the file name, NPI 1790787307 from the file header), \texttt{PAYER:UHC}, \texttt{PAYER:AETNA}. Entity names are stored as written in the file so a published file's payer column matches the registry. Any string up to 32 bytes works; longer ids are hashed and the file must carry the full text.
+\end{itemize}
+
+\textbf{Keys: hierarchy}
+\begin{itemize}
+\item Root key: one per entity, held offline. It signs delegations and revocations only. It never signs a rate; \texttt{commitRate} checks the signer against delegations and a root key has none.
+\item Signing key: one or more per entity, delegated by the root for a window [notBefore, notAfter). These live in the contract-management system that produces the rate sheet. Rotation = delegate a new key, revoke the old one from now.
+\item Delegation and revocation records are on the ledger. A verifier answers ``was key K authorized for entity E at time T'' from the ledger alone (\texttt{authorizedAt}).
+\end{itemize}
+
+\textbf{Keys: time}
+\begin{itemize}
+\item Validity is checked at the block timestamp of the commit, set by IBFT consensus, not by the signer. A key revoked at T cannot commit at T+1, and a compromised key cannot backdate a commit to before its revocation.
+\item Records committed before a revocation stay valid (\texttt{test\_revocation\_blocks\_future\_commits}).
+\item The ledger's clock is the contract's clock. Effective dates inside the rate (start, end) are contract terms signed by both parties and are separate from the commit time.
+\end{itemize}
+
+\textbf{Keys: signature format}
+\begin{itemize}
+\item EIP-712 typed data. A signing tool shows the fields to the person who signs. The domain separator binds chain id and contract address, so a signature cannot be replayed on another deployment (\texttt{test\_signature\_bound\_to\_deployment}).
+\item Both parties sign the same struct hash. The record id is that hash. Anyone can relay the transaction; the relayer has no authority. In the prototype CMS runs the relayer and is the registrar.
+\item Two signatures, one transaction. The first signature is held off-ledger in the app's pending store (\texttt{build/pending.json}: proposer, proposer signature, rate, time) until the second party countersigns. A proposal never countersigned leaves no ledger trace. An on-ledger proposal record, which would show who refused to sign, is deferred.
+\end{itemize}
+
+\textbf{Keys: failure cases}
+\begin{itemize}
+\item Signing key compromised: root revokes from the time of compromise. Records after that time by that key are invalid; records before it stand. Which to contest is a contract question.
+\item Root key lost or compromised: CMS replaces the root (\texttt{replaceRoot}) after re-proofing. Existing delegations stay until the new root revokes them.
+\item Registrar key compromised: a governance action by the validators. Out of scope; note it.
+\item Validator node keys are separate from record signing keys. The four validators stand for CMS, a provider association, a payer association, and an auditor. No validator can sign a rate.
+\item X.509 or DirectTrust certificates could stand in for the root key. The ledger still needs delegation and revocation records to answer ``valid at time T'' without an OCSP responder. The contract only needs the root's public key.
 \end{itemize}
 
 \textbf{Design}
 \begin{itemize}
-\item Record key: payer, plan id, provider NPI, code, modifier, setting. Record value: formula type and value, start date, end date, contract version, reference fee schedule version.
-\item Record types: rate record (both sign), chargemaster version (provider signs hash), contract version (both sign), plan definition (payer signs), amendment (references the record it replaces), checkpoint (witnesses co-sign).
-\item A verifier recomputes a rate line from signed inputs only. For percent-of-charges it needs the signed chargemaster version named in the record.
-\item Provider MRF lines and payer TiC lines cite the record id. X12 837 and 835 carry the record id in a REF segment. A claim priced against a missing, expired, or unsigned record is flagged at remittance.
-\item Out of scope for the first paper: claim adjudication, synthetic claims, dispute resolution logic, revocation, witnesses, amendments. The first spec has one record type and one check: does a published line match a signed record.
+\item Record key: payer id, plan id, provider TIN, NPI, code, modifier, setting. Record value: formula (fixed, percent of charges, percent of reference), value (cents or basis points), start, end, contract version, reference version.
+\item Record types on the ledger: Entity (registrar writes), Delegation and Revocation (root signs), Rate (both sign), ChargemasterVersion (provider signs a SHA-256 of the file, a version label, and an effective date). Amendment, witness checkpoint, and on-ledger proposal are deferred.
+\item Verifier: recomputes the amount from signed inputs only. Fixed: the value. Percent of charges: value times the list price for the code and setting in the chargemaster version the record names. Percent of reference: value times the reference amount in the named schedule version (implemented in contract and verifier, not exercised on real data).
+\item Verdict per published line: match, amount differs, no record (never signed), expired (signed but the window does not cover the date), ambiguous (more than one live record for the key), needs chargemaster (percent rate and no list price available).
+\item Provider MRF lines and payer TiC lines carry the record id. X12 837 and 835 could carry it in a REF segment; claims are out of scope.
+\item Scope: one check. Does a published line match a jointly signed record that covers its date.
 \end{itemize}
 
-\textbf{Keys}
+\textbf{Build: ledger}
 \begin{itemize}
-\item Identity roots: provider = TIN (contracts are signed at the TIN; a TIN covers one or more type 2 NPIs); payer = HIOS issuer id, NAIC code, or X12 payer id. Registrar = CMS, which already proofs both through PECOS, I\&A, and CCIIO. CMS binds an entity to a root key once and never signs a rate.
-\item Root key: offline, signs only delegations and revocations. The contract rejects a root key as a rate signer because it has no delegation. Signing keys are delegated for a window and live in the system that produces the rate sheet. Rotation = delegate new, revoke old from now.
-\item Validity is judged at the block timestamp of the commit, set by IBFT consensus, not by the signer. Records committed before a revocation stay valid; a compromised key cannot backdate. Contract effective dates are signed terms, separate from commit time.
-\item EIP-712 typed signatures over the same struct hash from both parties; the hash is the record id. Domain binds chain id and contract address (replay across deployments rejected in test). Relayer has no authority.
-\item First signature is held off ledger until the second exists; a proposal never countersigned leaves no trace. On-ledger proposals (who refused) deferred.
-\item Root loss: CMS replaces the root after re-proofing. Registrar key loss: validator governance, out of scope. Validator node keys are separate from signing keys; validators stand for CMS, a provider association, a payer association, an auditor.
+\item Contract \texttt{contracts/RateRegistry.sol}, Solidity 0.8.24, 7,220 bytes of bytecode, 35 ABI entries. EVM Shanghai (PUSH0). Event \texttt{RateCommitted} trimmed to five fields to avoid stack-too-deep.
+\item Network: Hyperledger Besu 26.10.2, IBFT 2.0, four validators in Docker (\texttt{besu/docker-compose.yml}), 2 s block period, zero base fee, chain id 2741. Fixed IPs because Besu rejects hostnames in enode URLs.
+\item Client \texttt{coral/chain.py}: web3 7 with the POA extra-data middleware and local signing; \texttt{coral/typed.py}: EIP-712 types and signing helpers; \texttt{coral/compile.py}: solc build cache. In-memory EVM (eth-tester) for tests.
+\item Reads come from events. Besu caps \texttt{eth\_getLogs} at 5000 blocks per call; \texttt{Chain.logs} scans from the deploy block (stored in \texttt{build/deployment.json}) in 4000-block ranges. Found when the app returned 500 after block 5000.
+\item \texttt{RateIndex}: loads every record once and indexes by key, for bulk verification. Per-line RPC lookups were quadratic and timed out on the first evaluation run.
+\item Tests (\texttt{tests/test\_registry.py}, 11, all pass): commit and read, duplicate, unauthorized key, wrong-side key, revocation, delegation window, root cannot sign, domain binding, root replacement, verify fixed, verify percent of charges.
 \end{itemize}
 
-\textbf{Build (done 2026-10-27)}
+\textbf{Build: files and matching}
 \begin{itemize}
-\item Contract RateRegistry.sol (Solidity 0.8.24, 7,220 bytes): entity, delegation, revocation, rate (two signatures), chargemaster version. 11 tests pass on an in-memory EVM.
-\item Hyperledger Besu 26.10.2, IBFT 2.0, four validators in Docker, 2 s blocks, zero base fee, chain id 2741.
-\item Python client (web3 7, eth-account). FastAPI app: provider/payer view (signed rates, pending, propose, chargemaster, keys, export with record id column) and CMS view (registry, coverage, verify uploaded provider file, check claim line by record id, ledger).
-\item Parsers for CMS provider CSV (v2/v3 tall) and payer Transparency in Coverage JSON (streamed). Provider parser tested on a real file; payer parser not yet.
+\item \texttt{coral/mrf.py}: \texttt{provider\_header} reads the two-row header (provider name, date, version, type 2 NPI); \texttt{provider\_csv} yields one line per negotiated row of a CMS v2/v3 tall CSV, with payer names mapped to registered payer ids and plan names used as plan ids; \texttt{payer\_json} streams a Transparency in Coverage in-network file with ijson and resolves provider references to NPIs (written, not yet run on a real file); \texttt{gross\_charges} indexes list price by code and setting from the gross charge column.
+\item \texttt{coral/verify.py}: \texttt{Line} (one published line, normalized), \texttt{verify\_line} (one verdict), \texttt{expected\_amount}.
+\item \texttt{coral/match.py}: pairs provider lines with payer lines on the record key and reproduces the Trilliant measure (exact, within 10\%, over 50\%); with ledger verdicts it attributes each remaining difference to the file that departs (provider file departs, payer file departs, both match, unsigned). Written; the payer side has not run on real data.
 \end{itemize}
 
-\textbf{Results (2026-10-27)}
+\textbf{Build: app}
 \begin{itemize}
-\item Real file: UCHealth Yampa Valley Medical Center, 2025-11-01, format 3.0.0, 141 MB, 633,324 rows, 454,793 with a dollar amount, 228,164 (36\%) percent of billed charges, 30 payer/plan pairs, NPI 1790787307.
-\item Signed the first 200 distinct dollar lines for United Healthcare / Broad Networks as ledger records (payer signature by a prototype key, not UHC's agreement). Gas 258,923 mean per record; 740-byte transaction input; 1.99 s per record when committed one per block.
-\item Verification: clean copy 200/200 match; index load 2.2 s, 200 lines verified in 2.2 s. Tampered copy with 20 altered amounts: 180 match, 20 amount\_differs, no false positives.
-\item Key rotation on the live ledger: old key rejected after revocation, earlier records still valid.
-\item Of ten hospital sites tried, four served the CMS-required cms-hpt.txt locator (NYP, UCHealth, OHSU, Houston Methodist).
+\item FastAPI and static HTML (\texttt{app/}). Signing keys are server-held (\texttt{build/keys.json}, clear text, prototype only); a deployment replaces one function with the entity's own signing service.
+\item Provider/payer page: Negotiated rates (the whole ledger, readable by anyone; one search box; each record opens to effective dates, contract, both signers, commit time), Pending (countersign, reject, withdraw), Propose (form; loads one of ten examples), Chargemaster (provider uploads a file; the server signs its hash and keeps the file under \texttt{build/chargemasters/<sha256>}), Keys (rotate). The ``sign as'' choice exists only because the server holds every key.
+\item CMS page: Registry (entity, kind, name, NPI, root key, signing keys and their state) and Verify a published file (provider CSV or payer JSON; the NPI comes from the file header; payer names in the file are matched to the registry; per-line verdicts and counts).
+\item Percent-of-charges records show the computed amount; hover shows percent, list price, and chargemaster version. The ledger holds only the hash; the server reads the list price from the stored file.
+\item Removed on 2026-10-29: export, coverage counts, claim-line check, block list. Claims are out of scope; the rest were views, not actions.
+\item Examples (\texttt{data/examples.json}, ten records, \texttt{scripts/seed\_examples.py} signs them): codes, plans, settings, list prices, and amounts copied from the UCHealth file (CT head, ED level 3, chest X-ray, metabolic panel, colonoscopy, knee arthroplasty, MS-DRG 470 and 871, enoxaparin; fee schedule, case rate, percent of charges). Contract and chargemaster version labels are marked as examples because the file does not carry them. The chargemaster version signed is the SHA-256 of the file itself, which holds the list prices.
+\item \texttt{scripts/bootstrap.py}: deploys the contract, registers the three entities, delegates one signing key each. \texttt{scripts/evaluate\_provider.py}: the evaluation below.
 \end{itemize}
 
-\textbf{Open}
+\textbf{Results (run 2026-10-27, \texttt{results/evaluate\_provider.json})}
 \begin{itemize}
-\item Payer side on real data (UHC TiC index), the Trilliant 450-hospital pairing, batched commits per block, on-ledger proposals, amendments.
+\item Input: UCHealth Yampa Valley Medical Center file, payer ``United Healthcare'', plan ``Broad Networks''. First 200 distinct (code, modifier, setting) lines with a dollar amount.
+\item Parse: 0.8 s for the 141 MB file to the first 200 lines.
+\item Commit: 200 records, one per block, 399 s wall, 1.99 s per record. Gas 258,923 mean per record. Transaction input 740 bytes mean. Sequential because the client waited for each receipt; the block gas limit allows many per block.
+\item Verify, clean copy: 200 of 200 match. Index load 2.2 s, verification 2.2 s for 200 lines.
+\item Verify, tampered copy (20 of 200 amounts altered by $\pm$10\%, +50\%, or $-$50\%): 180 match, 20 amount differs. No false positives, no misses.
+\item Key rotation on the ledger: new key delegated, old key revoked from now; a commit with the old key reverts with \texttt{SignerNotAuthorized}; \texttt{authorizedAt(old, commitTime)} true and \texttt{authorizedAt(old, now)} false.
+\item Example records: the three Aetna percent-of-charges records compute to \$67.39, \$310.65, and \$1,290.10 from the signed file, equal to the file's negotiated dollar column.
+\item The payer signature in these runs is a prototype key, not UnitedHealthcare's agreement. The runs show mechanism and cost, not that the file is correct.
+\end{itemize}
+
+\textbf{Open items}
+\begin{itemize}
+\item Payer side on real data: one Transparency in Coverage in-network file for the same provider (UHC publishes an index at transparency-in-coverage.uhc.com), run \texttt{payer\_json} and \texttt{match.py}.
+\item The Trilliant pairing (450 hospitals): provider files are found through each provider's \texttt{cms-hpt.txt}. Of ten providers tried on 2026-10-27, four served it (NYP, UCHealth, OHSU, Houston Methodist); the rest returned HTML or a block page.
+\item Add drug unit of measure and billing class to the record key.
+\item Batched commits, N per block; measure records per second.
+\item On-ledger proposal record. Amendments that reference the record they replace. Both deferred.
+\item Paper body: 10 pages, AMIA format, Vancouver references.
 \end{itemize}
 
 \textbf{Venue}
 \begin{itemize}
-\item AMIA Annual Symposium, Paper - Regular: 10 pages, abstract 125--150 words, one column, Letter, Vancouver references. 2027 symposium 6--10 November, San Diego. Call for papers not yet out; past deadlines mid March.
+\item AMIA Annual Symposium, Paper - Regular: 10 pages, abstract 125-150 words, one column, Letter, Vancouver references. 2027 symposium 6-10 November, San Diego. Call for papers not yet out; past deadlines mid March.
 \item Alternatives: IEEE ICBC 2027 (deadline 14 January 2027), Blockchain in Healthcare Today (10,000 words, USD 1,285 APC, PubMed Central), Journal of Medical Systems (IF 5.7).
 \end{itemize}
 
