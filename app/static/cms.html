@@ -24,7 +24,7 @@
     <div class="full"><button class="primary" type="submit">Verify</button> <span id="verifyMsg" class="muted"></span></div>
   </form>
   <div class="cards" id="verifyCards" style="margin-top:12px"></div>
-  <table><thead><tr><th>Provider</th><th>Payer</th><th>Plan</th><th>Code</th><th>Setting</th><th>Published</th><th>Signed</th><th>Result</th><th>Record</th></tr></thead><tbody id="verifyBody"></tbody></table>
+  <table><thead><tr><th>Provider</th><th>Payer</th><th>Plan</th><th>Code</th><th>Unit</th><th>Setting</th><th>Class</th><th>Published</th><th>Signed</th><th>Result</th><th>Record</th></tr></thead><tbody id="verifyBody"></tbody></table>
 </section>
 </main>
 <script>
@@ -45,9 +45,10 @@ async function init(){
   $('#verifyForm').asOf.value=new Date().toISOString().slice(0,10);
 }
 $('#verifyForm').onsubmit=async ev=>{ev.preventDefault();$('#verifyMsg').textContent='verifying…';try{const r=await api('/api/verify',{method:'POST',body:new FormData(ev.target)});
-  $('#verifyMsg').textContent=`${r.lines} negotiated lines checked`;
+  const sk=Object.entries(r.skipped||{}).map(([k,v])=>`${v} ${k.replaceAll('_',' ')}`).join(', ');
+  $('#verifyMsg').textContent=`${r.lines} negotiated lines checked`+(sk?`; skipped: ${sk}`:'');
   $('#verifyCards').innerHTML=Object.entries(r.counts).map(([k,v])=>`<div class="card"><div class="n">${v}</div><div class="l">${k.replaceAll('_',' ')}</div></div>`).join('');
-  $('#verifyBody').innerHTML=r.rows.map(x=>`<tr><td>${nameOf(x.providerId)}</td><td>${nameOf(x.payerId)}</td><td>${x.planId}</td><td>${x.code}${x.modifier?'-'+x.modifier:''}</td><td>${x.setting}</td><td>${published(x)}</td><td>${money(x.expected)}</td><td class="${x.status==='match'?'ok':'bad'}">${x.status.replaceAll('_',' ')}</td><td class="mono">${x.recordId?x.recordId.slice(0,10)+'…':'—'}</td></tr>`).join('');
+  $('#verifyBody').innerHTML=r.rows.map(x=>`<tr><td>${nameOf(x.providerId)}</td><td>${nameOf(x.payerId)}</td><td>${x.planId}</td><td>${x.code}${x.modifier?'-'+x.modifier:''}</td><td>${x.unit||'—'}</td><td>${x.setting}</td><td>${x.billingClass}</td><td>${published(x)}</td><td>${money(x.expected)}</td><td class="${x.status==='match'?'ok':'bad'}">${x.status.replaceAll('_',' ')}</td><td class="mono">${x.recordId?x.recordId.slice(0,10)+'…':'—'}</td></tr>`).join('');
 }catch(e){$('#verifyMsg').textContent=e.message;}};
 init();
 </script>

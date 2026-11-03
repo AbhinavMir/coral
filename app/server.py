@@ -22,10 +22,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from coral.chain import Chain, DEPLOY_FILE
-from coral.typed import Rate, ChargemasterVersion, sign_rate, SETTING_NAME, FORMULA_NAME, FORMULA, SETTING
+from coral.chain import Chain, DEPLOY_FILE, RateIndex
+from coral.typed import (Rate, ChargemasterVersion, sign_rate, SETTING_NAME, FORMULA_NAME, FORMULA, SETTING,
+                         BILLING_CLASS, BILLING_CLASS_NAME)
 from coral.verify import Line, verify_line
-from coral.mrf import provider_csv, provider_header, payer_json, gross_charges
+from coral.mrf import provider_csv, provider_header, payer_json, gross_charges, Skipped
 
 ROOT = Path(__file__).resolve().parent
 KEYS_FILE = DEPLOY_FILE.parent / "keys.json"
@@ -77,7 +78,7 @@ def _list_price(rec) -> int | None:
     for c in chain.chargemasters_for(r.providerId):
         if c["version"] == r.referenceVersion:
             idx = _gross_index(c["fileHash"].hex())
-            return idx.get((r.code, r.setting)) if idx else None
+            return idx.get((r.code, r.setting, r.unit)) if idx else None
     return None
 
 
@@ -91,9 +92,14 @@ def _rate_json(rec) -> dict:
         "providerSigner": rec.provider_signer, "payerSigner": rec.payer_signer,
         "payerId": r.payerId, "planId": r.planId, "providerId": r.providerId, "npi": r.npi,
         "code": r.code, "modifier": r.modifier_, "setting": SETTING_NAME[r.setting],
+        "billingClass": BILLING_CLASS_NAME[r.billingClass], "unit": r.unit,
         "formula": FORMULA_NAME[r.formula], "value": r.value,
         "valueText": f"${r.value/100:,.2f}" if r.formula == 0 else f"{r.value/100:.2f}%",
-        "start": r.start, "end": r.end, "contractVersion": r.contractVersion, "referenceVersion": r.referenceVersion,
+        "start": r.start, "end": r.end, "effectiveEnd": rec.effective_end,
+        "contractVersion": r.contractVersion, "referenceVersion": r.referenceVersion,
+        "supersedes": "0x" + r.supersedes.hex() if any(r.supersedes) else None,
+        "supersededBy": "0x" + rec.superseded_by.hex() if any(rec.superseded_by) else None,
+        "supersededAt": rec.superseded_at,
     }
 
 
@@ -105,21 +111,26 @@ class RateIn(BaseModel):
     code: str
     modifier: str = ""
     setting: str
+    billingClass: str = "facility"
+    unit: str = ""
     formula: str
     value: float          # dollars for fixed, percent for percentage formulas
     start: str            # YYYY-MM-DD
     end: str = ""         # YYYY-MM-DD or empty
     contractVersion: str
     referenceVersion: str = ""
+    supersedes: str = ""  # record id this one replaces, hex
 
     def to_rate(self) -> Rate:
         start = int(time.mktime(time.strptime(self.start, "%Y-%m-%d")))
         end = int(time.mktime(time.strptime(self.end, "%Y-%m-%d"))) if self.end else 0
         return Rate(
             payerId=self.payerId, planId=self.planId, providerId=self.providerId, npi=self.npi,
-            code=self.code, modifier_=self.modifier, setting=SETTING[self.setting], formula=FORMULA[self.formula],
+            code=self.code, modifier_=self.modifier, setting=SETTING[self.setting],
+            billingClass=BILLING_CLASS[self.billingClass], unit=self.unit, formula=FORMULA[self.formula],
             value=round(self.value * 100), start=start, end=end,
             contractVersion=self.contractVersion, referenceVersion=self.referenceVersion,
+            supersedes=bytes.fromhex(self.supersedes.removeprefix("0x")) if self.supersedes else b"\0" * 32,
         )
 
 
@@ -248,7 +259,8 @@ def rotate(entityId: str):
     now = int(time.time())
     new = Account.create()
     chain.delegate(e["root"]["key"], entityId, new.address, now)
-    chain.revoke(e["root"]["key"], entityId, e["signer"]["address"], now)
+    # a revocation must not be earlier than the block that carries it
+    chain.revoke(e["root"]["key"], entityId, e["signer"]["address"], now + 10)
     e["signer"] = {"address": new.address, "key": new.key.hex()}
     KEYS_FILE.write_text(json.dumps(keys, indent=2))
     return {"entityId": entityId, "newSigner": new.address, "signers": chain.delegations_for(entityId)}
@@ -272,7 +284,7 @@ async def verify(kind: str = Form(...), entityId: str = Form(...), asOf: str = F
     tmp.write_bytes(data)
     at = int(time.mktime(time.strptime(asOf, "%Y-%m-%d")))
     ents = keys["entities"]
-    rows, counts = [], {}
+    rows, counts, skipped = [], {}, Skipped()
     try:
         if kind == "provider":
             hdr = provider_header(tmp)
@@ -280,20 +292,25 @@ async def verify(kind: str = Form(...), entityId: str = Form(...), asOf: str = F
             if not npi:
                 raise HTTPException(400, "file header has no type_2_npi")
             payer_ids = {e["name"]: eid for eid, e in ents.items() if e["kind"] == "payer"}
-            lines = provider_csv(tmp, entityId, npi, payer_ids)
+            lines = provider_csv(tmp, entityId, npi, payer_ids, skipped=skipped)
         elif kind == "payer":
             if not planId:
                 raise HTTPException(400, "planId is required for a payer file")
             provider_map = {e["npi"]: eid for eid, e in ents.items() if e["kind"] == "provider" and e.get("npi")}
-            lines = payer_json(tmp, entityId, planId, provider_map)
+            lines = payer_json(tmp, entityId, planId, provider_map, skipped=skipped)
         else:
             raise HTTPException(400, "kind must be provider or payer")
+        index = RateIndex(chain)
         for line in lines:
-            v = verify_line(chain, line, at)
+            if line.amount_cents is None and line.percent_bp is None:
+                skipped.add("no_dollar_or_percent")
+                continue
+            v = verify_line(index, line, at)
             counts[v.status] = counts.get(v.status, 0) + 1
             rows.append({
                 "payerId": line.payerId, "planId": line.planId, "providerId": line.providerId, "npi": line.npi,
                 "code": line.code, "modifier": line.modifier_, "setting": SETTING_NAME[line.setting],
+                "billingClass": BILLING_CLASS_NAME[line.billingClass], "unit": line.unit,
                 "published": line.amount_cents if line.amount_cents is not None else line.percent_bp,
                 "publishedKind": "cents" if line.amount_cents is not None else "bp",
                 "expected": v.expected_cents, "status": v.status,
@@ -301,7 +318,7 @@ async def verify(kind: str = Form(...), entityId: str = Form(...), asOf: str = F
             })
     finally:
         tmp.unlink(missing_ok=True)
-    return {"lines": len(rows), "counts": counts, "rows": rows[:2000]}
+    return {"lines": len(rows), "counts": counts, "skipped": dict(skipped.counts), "rows": rows[:2000]}
 
 
 # ---- pages ------------------------------------------------------------------

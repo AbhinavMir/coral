@@ -8,11 +8,12 @@ from pathlib import Path
 
 from eth_account import Account
 from web3 import Web3
+from web3.logs import DISCARD
 
 from .compile import compile_registry
 from .typed import (
     KIND, Rate, ChargemasterVersion, b32, unb32, domain,
-    sign_delegation, sign_revocation, sign_rate, sign_chargemaster,
+    sign_delegation, sign_revocation, sign_root_veto, sign_rate, sign_chargemaster,
 )
 
 DEPLOY_FILE = Path(__file__).resolve().parent.parent / "build" / "deployment.json"
@@ -25,6 +26,26 @@ class RateRecord:
     committed_at: int
     provider_signer: str
     payer_signer: str
+    superseded_by: bytes = b"\0" * 32
+    superseded_at: int = 0
+
+    @property
+    def effective_end(self) -> int:
+        """Own end, or the start of the record that superseded this one."""
+        return self.superseded_at if self.superseded_at else self.rate.end
+
+    def covers(self, at: int) -> bool:
+        return self.rate.start <= at and (self.effective_end == 0 or at < self.effective_end)
+
+
+def _record(rate_id: bytes, b, c) -> RateRecord:
+    rate = Rate(
+        payerId=unb32(b[0]), planId=unb32(b[1]), providerId=unb32(b[2]), npi=unb32(b[3]),
+        code=unb32(b[4]), modifier_=unb32(b[5]), setting=b[6], billingClass=b[7], unit=unb32(b[8]),
+        formula=b[9], value=b[10], start=b[11], end=b[12],
+        contractVersion=unb32(b[13]), referenceVersion=unb32(b[14]), supersedes=bytes(b[15]),
+    )
+    return RateRecord(rate_id, rate, c[0], c[1], c[2], bytes(c[3]), c[4])
 
 
 class Chain:
@@ -90,8 +111,15 @@ class Chain:
     def register_entity(self, entity_id: str, kind: str, root: str, registrar=None):
         return self._send(self.contract.functions.registerEntity(b32(entity_id), KIND[kind], root), registrar)
 
-    def replace_root(self, entity_id: str, new_root: str, registrar=None):
-        return self._send(self.contract.functions.replaceRoot(b32(entity_id), new_root), registrar)
+    def propose_root(self, entity_id: str, new_root: str, registrar=None):
+        return self._send(self.contract.functions.proposeRoot(b32(entity_id), new_root), registrar)
+
+    def activate_root(self, entity_id: str):
+        return self._send(self.contract.functions.activateRoot(b32(entity_id)))
+
+    def veto_root(self, root_key, entity_id: str, new_root: str):
+        sig = sign_root_veto(root_key, self.domain, entity_id, new_root)
+        return self._send(self.contract.functions.vetoRoot(b32(entity_id), sig))
 
     # ---- keys -------------------------------------------------------------
 
@@ -113,16 +141,20 @@ class Chain:
 
     def commit_rate(self, rate: Rate, provider_sig: bytes, payer_sig: bytes) -> bytes:
         rcpt = self._send(self.contract.functions.commitRate(rate.tuple(), provider_sig, payer_sig))
-        ev = self.contract.events.RateCommitted().process_receipt(rcpt)
+        ev = self.contract.events.RateCommitted().process_receipt(rcpt, errors=DISCARD)
         return ev[0]["args"]["rateId"]
 
     def commit_rate_with_keys(self, rate: Rate, provider_key, payer_key) -> bytes:
         return self.commit_rate(rate, sign_rate(provider_key, self.domain, rate), sign_rate(payer_key, self.domain, rate))
 
+    def commit_rates(self, rates: list[Rate], provider_sigs: list[bytes], payer_sigs: list[bytes]):
+        """Many records in one transaction. Returns the receipt."""
+        return self._send(self.contract.functions.commitRates([r.tuple() for r in rates], provider_sigs, payer_sigs))
+
     def commit_chargemaster(self, cm: ChargemasterVersion, provider_key) -> bytes:
         sig = sign_chargemaster(provider_key, self.domain, cm)
         rcpt = self._send(self.contract.functions.commitChargemaster(cm.tuple(), sig))
-        ev = self.contract.events.ChargemasterCommitted().process_receipt(rcpt)
+        ev = self.contract.events.ChargemasterCommitted().process_receipt(rcpt, errors=DISCARD)
         return ev[0]["args"]["cmId"]
 
     def get_rate(self, rate_id: bytes) -> RateRecord | None:
@@ -130,12 +162,16 @@ class Chain:
         if c[0] == 0:
             return None
         b = self.contract.functions.rateBodies(rate_id).call()
-        rate = Rate(
-            payerId=unb32(b[0]), planId=unb32(b[1]), providerId=unb32(b[2]), npi=unb32(b[3]),
-            code=unb32(b[4]), modifier_=unb32(b[5]), setting=b[6], formula=b[7], value=b[8],
-            start=b[9], end=b[10], contractVersion=unb32(b[11]), referenceVersion=unb32(b[12]),
-        )
-        return RateRecord(rate_id, rate, c[0], c[1], c[2])
+        return _record(rate_id, b, c)
+
+    def get_rates(self, ids: list[bytes], batch: int = 500) -> list[RateRecord]:
+        """Bodies and commit data for many ids, `batch` per RPC call."""
+        out = []
+        for i in range(0, len(ids), batch):
+            chunk = ids[i:i + batch]
+            bodies, commits = self.contract.functions.getRates(chunk).call()
+            out += [_record(rid, b, c) for rid, b, c in zip(chunk, bodies, commits)]
+        return out
 
     def logs(self, event, argument_filters=None, step: int = 4000) -> list:
         """All logs of `event` since deployment, in block ranges under Besu's 5000-block eth_getLogs limit."""
@@ -156,19 +192,15 @@ class Chain:
         if payer_id:
             flt["payerId"] = b32(payer_id)
         logs = self.logs(self.contract.events.RateCommitted(), flt or None)
-        return [self.get_rate(lg["args"]["rateId"]) for lg in logs]
+        return self.get_rates([lg["args"]["rateId"] for lg in logs])
 
-    def find_rate(self, payer_id, plan_id, provider_id, npi, code, modifier, setting, at: int) -> list[RateRecord]:
-        """Rates whose key matches and whose window covers `at`."""
-        out = []
-        for rec in self.rates_for(provider_id=provider_id, payer_id=payer_id):
-            r = rec.rate
-            if (r.planId, r.npi, r.code, r.modifier_, r.setting) != (plan_id, npi, code, modifier, setting):
-                continue
-            if at < r.start or (r.end and at >= r.end):
-                continue
-            out.append(rec)
-        return out
+    def any_for(self, key: tuple) -> list[RateRecord]:
+        """Every record for one key, superseded or not."""
+        return [rec for rec in self.rates_for(provider_id=key[2], payer_id=key[0]) if rec.rate.key() == key]
+
+    def find_rate(self, key: tuple, at: int) -> list[RateRecord]:
+        """Records whose key matches and whose effective window covers `at`."""
+        return [rec for rec in self.any_for(key) if rec.covers(at)]
 
     def chargemasters_for(self, provider_id: str) -> list[dict]:
         logs = self.logs(self.contract.events.ChargemasterCommitted(), {"providerId": b32(provider_id)})
@@ -203,19 +235,17 @@ class Chain:
 class RateIndex:
     """All committed rates loaded once and indexed by key. Use for bulk verification."""
 
-    def __init__(self, chain: Chain, provider_id: str | None = None, payer_id: str | None = None):
-        self.records = chain.rates_for(provider_id=provider_id, payer_id=payer_id)
+    def __init__(self, chain: Chain, provider_id: str | None = None, payer_id: str | None = None, records=None):
+        self.records = records if records is not None else chain.rates_for(provider_id=provider_id, payer_id=payer_id)
         self.by_key: dict[tuple, list[RateRecord]] = {}
         for rec in self.records:
-            r = rec.rate
-            self.by_key.setdefault((r.payerId, r.planId, r.providerId, r.npi, r.code, r.modifier_, r.setting), []).append(rec)
+            self.by_key.setdefault(rec.rate.key(), []).append(rec)
 
-    def find_rate(self, payer_id, plan_id, provider_id, npi, code, modifier, setting, at: int) -> list[RateRecord]:
-        return [rec for rec in self.by_key.get((payer_id, plan_id, provider_id, npi, code, modifier, setting), [])
-                if rec.rate.start <= at and (rec.rate.end == 0 or at < rec.rate.end)]
+    def find_rate(self, key: tuple, at: int) -> list[RateRecord]:
+        return [rec for rec in self.by_key.get(key, []) if rec.covers(at)]
 
-    def any_for(self, payer_id, plan_id, provider_id, npi, code, modifier, setting) -> list[RateRecord]:
-        return self.by_key.get((payer_id, plan_id, provider_id, npi, code, modifier, setting), [])
+    def any_for(self, key: tuple) -> list[RateRecord]:
+        return self.by_key.get(key, [])
 
 
 def _signing_middleware(acct):

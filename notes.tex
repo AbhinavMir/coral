@@ -1,0 +1,101 @@
+\section*{Working notes (remove before submission)}
+
+Everything built for this paper is recorded here. Dates are absolute. Numbers in the body come from \texttt{numbers.tex}, written by \texttt{scripts/make\_numbers.py} from \texttt{results/*.json}. Repository: \url{https://github.com/AbhinavMir/coral}. Say provider, not hospital, except in a regulation name or a cited study.
+
+\textbf{State (2026-11-03)}
+\begin{itemize}
+\item Paper body written: Introduction, Background, Related work, Methods, Results, Discussion, Conclusion, 23 references. Title unchanged; the review's suggestion (do not lead with ``Private Blockchain'') is not applied. Abhinav decides.
+\item Contract rewritten on 2026-11-03 after the review: revocation bound to block time, root replacement with a seven-day delay and a root veto, supersedes field, overlapping windows rejected, batch commit, batch read, drug unit and billing class in the key. 16 tests pass.
+\item Runs on 2026-11-03: full sheet (\texttt{results/evaluate\_sheet.json}), five providers against one Aetna file on 16 codes plus the synthetic attribution run (\texttt{results/evaluate\_pairs.json}).
+\item Not done: UnitedHealthcare payer side (files are 9 GB and more per plan); JSON provider files (four of ten systems); an on-ledger proposal record; witness checkpoints; a separate chargemaster file.
+\end{itemize}
+
+\textbf{Problem}
+\begin{itemize}
+\item Providers publish negotiated rates under 45 CFR 180. Payers publish in-network rates under Transparency in Coverage (85 FR 72158). Each file is produced by one party. No file carries the other party's signature.
+\item Trilliant Health, 30 April 2026: 450 hospitals, Aetna and UnitedHealthcare, 16 codes (8 MS-DRG: 189, 190, 193, 280, 291, 392, 552, 641; 5 GI CPT: 43239, 45380, 45385, 47562, 49650; 3 orthopedic CPT: 29827, 29881, 29916), data processed August 2025. Exact 9.0\% inpatient, 10.8\% GI, 11.7\% orthopedic. Within 10\%: 50.8\%, 41.7\%, 47.4\%. Over 50\% apart: 17.9\% inpatient and GI. Ratio = hospital rate / plan rate; exact 1.0, near 0.9--1.1, material under 0.5 or over 1.5. The code list is in an image on the report page, not in its text.
+\item UCHealth Yampa Valley Medical Center file (2025-11-01, CMS 3.0.0, NPI 1790787307): 633,324 rows; every row billing class facility; settings inpatient 229,285 and outpatient 404,039; methodologies: percent of total billed charges 228,164, other (algorithm) 178,531, fee schedule 168,658, case rate 57,918, per diem 53; 30 payer/plan pairs; 165,513 rows have only CDM, RC, or NDC codes.
+\end{itemize}
+
+\textbf{Terms}
+\begin{itemize}
+\item Negotiated rate: the price a provider and a payer agreed for one code. Contractual. The CMS file calls it the payer-specific negotiated charge.
+\item Chargemaster: the provider's list price for every item. Set by the provider alone. The CMS file calls it the gross charge. A percent-of-charges rate is a percent of this number.
+\item Setting: inpatient or outpatient (CMS column; ``both'' expands to one line per setting). Billing class: facility or professional (CMS column; TiC \texttt{billing\_class}). Drug unit: CMS \texttt{drug\_unit\_of\_measurement} and \texttt{drug\_type\_of\_measurement}, joined as ``1 ML''. TiC has no drug unit.
+\item Record key: payer, plan, provider TIN, NPI, code, modifier, setting, billing class, unit. Not in either file and not in the record: place of service beyond the setting split, revenue code, bundling, multiple-procedure reductions, outliers, carve-outs, per-diem tiers, escalators.
+\item A percent-of-charges row in the CMS file carries both the percent and the dollar result. The contract term is the percent; the record is percent of charges and the verifier recomputes the dollar from the row's gross charge. Signing the dollar instead produced 81,470 false key collisions on the first trial (2026-11-03); signing the percent leaves \sheetCollisions{}.
+\end{itemize}
+
+\textbf{Prior art} (searches 27 October and 3 November 2026)
+\begin{itemize}
+\item No paper or product found on jointly signed negotiated rates or a ledger that holds rate records.
+\item Claim and directory networks: Change Healthcare on Hyperledger Fabric (2018), Synaptic Health Alliance (provider directory), ProCredEx (credentials), MediLedger 340B (2021). None holds a rate with both signatures.
+\item File comparisons: Jiang et al.\ JGIM 2022 (compliance); Wang et al.\ Health Affairs Forefront 2023 (TiC consistent with commercial sources); Henderson and Mouslim AJMC 2024 (insurer vs hospital cross-validation); Turquoise 2025 impact report; PatientRightsAdvocate eighth report (September 2026, 49.4\% of 2,000 hospitals compliant). No Jiang/Bai hospital-versus-insurer paper exists; the review's pointer was wrong.
+\item Transparency logs: Certificate Transparency, Trillian, SCITT (now RFC 9943, June 2026). PeerReview, SUNDR. Zieglmeier arXiv 2308.04781: an append is not proof of receipt.
+\item CY2024 OPPS rule (88 FR 81540): affirmation statement and estimated allowed amount; CY2026 replaced the estimated allowed amount with median, 10th, and 90th percentile allowed amounts from 1 January 2026.
+\end{itemize}
+
+\textbf{Keys}
+\begin{itemize}
+\item Identity roots: provider TIN (the Aetna file carries the EIN per provider group, so the payer side can name the same entity); payer id (prototype: opaque string; deployment: HIOS or X12 payer id). Registrar: CMS, binds entity id to root key once, never signs a rate.
+\item Root key offline, signs delegations, revocations, and root vetoes only. Signing keys delegated for a window. \texttt{authorizedAt(entity, key, t)} answers from the ledger.
+\item Validity judged at the block timestamp of the commit. \texttt{revoke} rejects \texttt{effectiveFrom} before \texttt{block.timestamp} (\texttt{BackdatedRevocation}), so a root cannot repudiate a record its key signed. The app's rotate action revokes from now plus ten seconds.
+\item Root replacement: \texttt{proposeRoot} (registrar), \texttt{activateRoot} after \texttt{ROOT\_DELAY} = 7 days, \texttt{vetoRoot} by the current root (EIP-712 \texttt{RootVeto}). Old delegations stay until the new root revokes them.
+\item EIP-712 typed data for every record; domain bound to chain id and contract address. Both parties sign the same struct hash; the hash is the record id. First signature held off-ledger in \texttt{build/pending.json} until the second party countersigns.
+\end{itemize}
+
+\textbf{Design}
+\begin{itemize}
+\item Rate struct: 16 fields (9 key, 7 value including \texttt{supersedes}). \texttt{rateId} hashes two \texttt{abi.encode} halves joined with \texttt{bytes.concat}, which equals one encode of all fields; the contract compiles with \texttt{viaIR} to avoid stack-too-deep.
+\item One live record per key: \texttt{keyRecords[keyHash]} lists ids; \texttt{\_checkOverlap} rejects a window that overlaps a live window (\texttt{OverlappingWindow}); \texttt{supersedes} names the record to end, which must share the key and not be superseded already; the old record's effective end becomes the new start (\texttt{RateSuperseded} event; \texttt{effectiveEnd(id)}).
+\item \texttt{commitRates} commits a batch atomically. Besu's default transaction size limit (128 KB) allows about 100 records per transaction at 834 bytes each; 250 failed with ``Transaction size exceeds the maximum allowed size''.
+\item \texttt{getRates(ids[])} returns bodies and commit data for many ids; the client reads 500 per call. Without it, loading 262k records took two RPC calls each.
+\item Verifier verdicts: match, amount differs, no record, expired, ambiguous (cannot occur now), needs chargemaster. Percent lines compared on the percent when the file gives it.
+\end{itemize}
+
+\textbf{Build}
+\begin{itemize}
+\item \texttt{contracts/RateRegistry.sol} (Solidity 0.8.24, viaIR, 11,901 bytes, 59 ABI entries). \texttt{coral/typed.py} (types, \texttt{Rate.key()}, \texttt{sign\_root\_veto}). \texttt{coral/chain.py} (\texttt{get\_rates}, \texttt{commit\_rates}, \texttt{propose/activate/veto\_root}, \texttt{RateRecord.effective\_end}, \texttt{covers}). \texttt{coral/verify.py} (\texttt{Line.key()}). \texttt{coral/mrf.py} (\texttt{Skipped} counts; \texttt{normalize\_modifiers}; unit and billing class; payer parser: gzip, code filter, remote \texttt{location} references counted as \texttt{provider\_reference\_remote}, no service code counted as \texttt{setting\_unknown}, place of service 21 inpatient and 19/22/23/24 outpatient, per diem accepted as an amount). \texttt{coral/match.py} keys on \texttt{Line.key()}.
+\item Network: Hyperledger Besu 26.10.2, IBFT 2.0, four validators in Docker, chain id 2741, zero base fee. \texttt{Chain.logs} scans from the deploy block in 4000-block ranges (Besu caps \texttt{eth\_getLogs} at 5000 blocks).
+\item Scripts: \texttt{bootstrap.py} (deploy, register three entities), \texttt{seed\_examples.py} (ten examples plus the chargemaster hash; J1650 carries unit ``1 ML''), \texttt{evaluate\_sheet.py} (full sheet; registers every payer in the file; signs with a process pool; batches of 100, eight in flight; verifies clean and 1\% altered copies; disk delta of the CMS validator), \texttt{evaluate\_pairs.py} (five providers vs Aetna on 16 codes; synthetic attribution), \texttt{make\_numbers.py}. \texttt{evaluate\_provider.py} (the 200-record run of 2026-10-27) was removed; its output stays in \texttt{results/evaluate\_provider.json}.
+\item App: provider/payer page (Negotiated rates with one search box, Pending, Propose with billing class, unit, and ``replaces record'', Chargemaster, Keys) and CMS page (Registry, Verify a published file with unit and class columns and skipped counts). The verify endpoint loads the ledger once into a \texttt{RateIndex}.
+\item Tests (16): commit and read, duplicate, unauthorized key, wrong-side key, revocation, backdated revocation rejected, delegation window, root cannot sign, domain binding, root replacement waits and can be vetoed, root replacement after delay, overlapping window rejected, supersede amends mid-window, batch commit (one bad signature fails the batch), verify fixed, verify percent of charges.
+\end{itemize}
+
+\textbf{Data}
+\begin{itemize}
+\item Provider files (\texttt{data/raw/}, not committed): UCHealth Yampa Valley (141 MB); \texttt{others/}: OHSU (284 MB, 2026-03-23, NPI 1609824010), Advocate Christ (143 MB, 2026-11-03, NPIs 1548375082, 1386188068, 1922542604), UCHealth Memorial Hospital Central (267 MB, 2025-11-01, NPI 1144397134), Alta Bates Summit, Summit campus (15 MB, 2026-04-01, eight NPIs). All CMS 3.0.0 tall CSV.
+\item Discovery, 2026-11-03: tall CSV from OHSU, Advocate, UCHealth, Sutter; JSON from NYP, Houston Methodist, Stanford, BJC; wide CSV from UW Health; empty zip from Intermountain. 2026-10-27: four of ten served \texttt{cms-hpt.txt} (NYP, UCHealth, OHSU, Houston Methodist).
+\item Payer files (\texttt{data/raw/tic/}): UHC index \texttt{https://transparency-in-coverage.uhc.com/api/v1/uhc/blobs?prefix=2026-11-01} (83,731 blobs, 2,977 in-network; commercial files 9.0--9.6 GB each; not downloaded). Aetna index via \texttt{health1.aetna.com/healthsparq/public/service/v2/mrf/all} to \texttt{latest\_metadata.json} (5,697 in-network files, 2026-10-05, by plan cluster); downloaded \texttt{pl-1s7-tr25} (547 plans, 414 Aetna Choice POS II, 1.69 GB gz). The file has inline \texttt{provider\_references} with NPIs and EIN TINs.
+\item Aetna commercial rows per provider file: Yampa (Aetna, Commercial); Memorial (Aetna Core/Meritain, Commercial; Aetna ASA, Commercial not used); Advocate (Aetna, Commercial); OHSU (AETNA HEALTHCARE, AETNA); Alta Bates (Aetna, HMO/PPO). Crosswalk label on both sides: ``Aetna commercial''.
+\end{itemize}
+
+\textbf{Results} are in the body (Tables 1--3) and in \texttt{results/}. Earlier run, 2026-10-27, superseded: 200 UHC Broad Networks records one per block, 258,923 gas each, 1.99 s each, 200/200 match, 20/20 tampered caught.
+
+\textbf{Review (2026-11-02, simulated PI) and what was done}
+\begin{itemize}
+\item Abstract overclaims: rewritten to the runs. Done.
+\item Circular 200-record evaluation: replaced by the full-sheet run reported as self-consistency plus cost, with the key-collision and no-code findings. Done.
+\item \texttt{revoke} backdating: bound to block time. Done. \texttt{replaceRoot} without delay: delay and veto. Done. No correction path: supersedes and overlap rejection. Done.
+\item Drug unit and billing class in the key: done. Payer parser defects (remote references, missing service code): counted, not guessed. Done.
+\item Invented fields (contract version, start, end): stated in Methods and Limitations. Chargemaster is the MRF's own hash: stated in Limitations.
+\item Attribution as a synthetic run: done (\texttt{evaluate\_pairs.py}, part 2).
+\item 450-hospital reproduction replaced by five providers, one payer, 16 codes, with discovery reported. Done. UHC side not done (file size).
+\item Related work added (Jiang 2022; Wang 2023; Henderson 2024; Turquoise; PRA; OPPS CY2024; Kuo 2017; ProCredEx; Zieglmeier). The Jiang/Bai comparison paper the review named does not exist.
+\item Writing: gas kept in Table 1 as a work measure with a note that the network charges no fee; EIP-712 named once in Methods; adoption paragraph added; ``departs from the signed record'' used. Title not changed.
+\end{itemize}
+
+\textbf{Open items}
+\begin{itemize}
+\item UHC payer side: one 9 GB file for the UHC plans in the Yampa file.
+\item JSON provider files: a parser for the CMS JSON schema would double the discovery rate.
+\item Item-level key: the \sheetCollisions{} collision rows need a chargemaster item id in the key or a rule that one code has one rate.
+\item On-ledger proposal record (who refused to sign); witness checkpoints; a separate chargemaster file instead of the MRF hash.
+\item Cut to 10 pages and run a claim audit before submission.
+\end{itemize}
+
+\textbf{Venue}
+\begin{itemize}
+\item AMIA Annual Symposium 2027, Paper - Regular: 10 pages including references and figures, abstract 125--150 words, one column, Letter, Vancouver references. Symposium 6--10 November 2027, San Diego. Call for papers expected March 2027.
+\item Alternatives: IEEE ICBC 2027 (deadline 14 January 2027), Blockchain in Healthcare Today, Journal of Medical Systems.
+\end{itemize}

@@ -19,7 +19,7 @@
     {"description": "Total knee arthroplasty", "code": "CPT:27447", "setting": "outpatient", "payer": "Aetna", "plan": "Medicare Advantage", "formula": "fixed", "value": 12930.90, "methodology": "fee schedule"},
     {"description": "Major hip and knee joint replacement without MCC", "code": "MS-DRG:470", "setting": "inpatient", "payer": "United Healthcare", "plan": "Medicare Advantage", "formula": "fixed", "value": 23521.51, "methodology": "case rate"},
     {"description": "Septicemia or severe sepsis without MV >96 hours with MCC", "code": "MS-DRG:871", "setting": "inpatient", "payer": "Aetna", "plan": "Medicare Advantage", "formula": "fixed", "value": 23687.34, "methodology": "case rate"},
-    {"description": "Enoxaparin 100 mg/mL syringe", "code": "HCPCS:J1650", "setting": "inpatient", "payer": "Aetna", "plan": "Commercial", "formula": "percent_of_charges", "value": 95.00, "gross": 70.94, "amount": 67.39, "methodology": "percent of total billed charges"}
+    {"description": "Enoxaparin 100 mg/mL syringe", "code": "HCPCS:J1650", "setting": "inpatient", "unit": "1 ML", "payer": "Aetna", "plan": "Commercial", "formula": "percent_of_charges", "value": 95.00, "gross": 70.94, "amount": 67.39, "methodology": "percent of total billed charges"}
   ],
   "contractVersion": {"United Healthcare": "example agreement, UHC", "Aetna": "example agreement, Aetna"},
   "start": "2025-11-01"

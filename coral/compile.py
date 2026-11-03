@@ -18,7 +18,7 @@ def compile_registry(force: bool = False) -> dict:
         solcx.install_solc(SOLC)
     solcx.set_solc_version(SOLC)
     compiled = solcx.compile_files(
-        [str(SRC)], output_values=["abi", "bin"], optimize=True, optimize_runs=200
+        [str(SRC)], output_values=["abi", "bin"], optimize=True, optimize_runs=200, via_ir=True
     )
     key = next(k for k in compiled if k.endswith(":RateRegistry"))
     OUT.parent.mkdir(exist_ok=True)

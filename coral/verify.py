@@ -23,9 +23,15 @@ class Line:
     code: str
     modifier_: str
     setting: int
+    billingClass: int
+    unit: str
     amount_cents: int | None      # dollar amount when the file gives one
     percent_bp: int | None        # basis points when the file gives a percentage
     gross_charge_cents: int | None = None  # provider file only
+
+    def key(self) -> tuple:
+        return (self.payerId, self.planId, self.providerId, self.npi, self.code, self.modifier_,
+                self.setting, self.billingClass, self.unit)
 
 
 @dataclass
@@ -52,18 +58,12 @@ def expected_amount(rec: RateRecord, gross_charge_cents: int | None, reference_c
 
 
 def verify_line(chain, line: Line, at: int, reference_cents: int | None = None) -> Verdict:
-    """`chain` is a Chain (one RPC lookup per line) or a RateIndex (loaded once)."""
-    k = (line.payerId, line.planId, line.providerId, line.npi, line.code, line.modifier_, line.setting)
-    recs = chain.find_rate(*k, at)
+    """`chain` is a Chain (one RPC lookup per line) or a RateIndex (loaded once). Both expose find_rate and any_for."""
+    k = line.key()
+    recs = chain.find_rate(k, at)
     if not recs:
         # distinguish "never signed" from "signed but window closed"
-        if hasattr(chain, "any_for"):
-            any_recs = chain.any_for(*k)
-        else:
-            any_recs = [r for r in chain.rates_for(line.providerId, line.payerId)
-                        if (r.rate.planId, r.rate.npi, r.rate.code, r.rate.modifier_, r.rate.setting)
-                        == (line.planId, line.npi, line.code, line.modifier_, line.setting)]
-        return Verdict("expired" if any_recs else "no_record", None, None, line.amount_cents)
+        return Verdict("expired" if chain.any_for(k) else "no_record", None, None, line.amount_cents)
     if len(recs) > 1:
         return Verdict("ambiguous", None, None, line.amount_cents)
     rec = recs[0]

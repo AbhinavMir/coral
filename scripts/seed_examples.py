@@ -52,7 +52,8 @@ def main():
         qkey = keys["entities"][payer_id]["signer"]["key"]
         rate = Rate(
             payerId=payer_id, planId=r["plan"], providerId=ex["providerId"], npi=ex["npi"],
-            code=r["code"], modifier_="", setting=SETTING[r["setting"]], formula=FORMULA[r["formula"]],
+            code=r["code"], modifier_="", setting=SETTING[r["setting"]], billingClass=1, unit=r.get("unit", ""),
+            formula=FORMULA[r["formula"]],
             value=round(r["value"] * 100), start=day(ex["start"]), end=0,
             contractVersion=ex["contractVersion"][r["payer"]],
             referenceVersion="" if r["formula"] == "fixed" else cm["version"],

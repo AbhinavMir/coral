@@ -10,8 +10,10 @@ from eth_account import Account
 from eth_account.messages import encode_typed_data
 from eth_utils import keccak, to_checksum_address
 
-SETTING = {"inpatient": 1, "outpatient": 2, "professional": 3}
+SETTING = {"inpatient": 1, "outpatient": 2}
 SETTING_NAME = {v: k for k, v in SETTING.items()}
+BILLING_CLASS = {"facility": 1, "professional": 2}
+BILLING_CLASS_NAME = {v: k for k, v in BILLING_CLASS.items()}
 FORMULA = {"fixed": 0, "percent_of_charges": 1, "percent_of_reference": 2}
 FORMULA_NAME = {v: k for k, v in FORMULA.items()}
 KIND = {"provider": 1, "payer": 2}
@@ -28,6 +30,10 @@ TYPES = {
         {"name": "signer", "type": "address"},
         {"name": "effectiveFrom", "type": "uint64"},
     ],
+    "RootVeto": [
+        {"name": "entityId", "type": "bytes32"},
+        {"name": "newRoot", "type": "address"},
+    ],
     "Rate": [
         {"name": "payerId", "type": "bytes32"},
         {"name": "planId", "type": "bytes32"},
@@ -36,12 +42,15 @@ TYPES = {
         {"name": "code", "type": "bytes32"},
         {"name": "modifier_", "type": "bytes32"},
         {"name": "setting", "type": "uint8"},
+        {"name": "billingClass", "type": "uint8"},
+        {"name": "unit", "type": "bytes32"},
         {"name": "formula", "type": "uint8"},
         {"name": "value", "type": "uint64"},
         {"name": "start", "type": "uint64"},
         {"name": "end", "type": "uint64"},
         {"name": "contractVersion", "type": "bytes32"},
         {"name": "referenceVersion", "type": "bytes32"},
+        {"name": "supersedes", "type": "bytes32"},
     ],
     "ChargemasterVersion": [
         {"name": "providerId", "type": "bytes32"},
@@ -76,18 +85,26 @@ class Rate:
     npi: str
     code: str
     modifier_: str
-    setting: int
+    setting: int      # 1 inpatient, 2 outpatient
+    billingClass: int # 1 facility, 2 professional
+    unit: str         # drug unit of measure, "" when none
     formula: int
     value: int        # cents for fixed; basis points for percent (10000 = 100%)
     start: int        # unix seconds, inclusive
     end: int          # unix seconds, exclusive; 0 = open
     contractVersion: str
     referenceVersion: str
+    supersedes: bytes = b"\0" * 32  # id of the record this one replaces
+
+    def key(self) -> tuple:
+        return (self.payerId, self.planId, self.providerId, self.npi, self.code, self.modifier_,
+                self.setting, self.billingClass, self.unit)
 
     def message(self) -> dict:
         d = asdict(self)
-        for k in ("payerId", "planId", "providerId", "npi", "code", "modifier_", "contractVersion", "referenceVersion"):
+        for k in ("payerId", "planId", "providerId", "npi", "code", "modifier_", "unit", "contractVersion", "referenceVersion"):
             d[k] = b32(d[k])
+        d["supersedes"] = bytes(d["supersedes"])
         return d
 
     def tuple(self) -> tuple:
@@ -141,6 +158,10 @@ def sign_revocation(root_key, dom, entity_id: str, signer: str, effective_from: 
     return sign(root_key, dom, "Revocation", {
         "entityId": b32(entity_id), "signer": to_checksum_address(signer), "effectiveFrom": effective_from,
     })
+
+
+def sign_root_veto(root_key, dom, entity_id: str, new_root: str) -> bytes:
+    return sign(root_key, dom, "RootVeto", {"entityId": b32(entity_id), "newRoot": to_checksum_address(new_root)})
 
 
 def sign_rate(key, dom, rate: Rate) -> bytes:

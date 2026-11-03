@@ -15,7 +15,7 @@ from .verify import Line, Verdict
 
 
 def key(ln: Line) -> tuple:
-    return (ln.payerId, ln.planId, ln.providerId, ln.npi, ln.code, ln.modifier_, ln.setting)
+    return ln.key()
 
 
 @dataclass

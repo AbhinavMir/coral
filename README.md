@@ -1,24 +1,25 @@
 # CORAL: Committed Ratesheet on Ledger
 
 A permissioned ledger on which a provider and a payer jointly sign each
-negotiated rate. Published price files cite the record id, so a
-line that departs from the signed rate is detected by anyone with the file.
+negotiated rate. Published price files cite the record id, so a line that
+departs from the signed rate is detected by anyone with the file.
 
-Paper and all working notes: `abstract.tex` (AMIA format).
+Paper and all working notes: `abstract.tex` (AMIA format; body in `abstract.tex`,
+notes in `notes.tex`, run numbers in `numbers.tex` written by `scripts/make_numbers.py`).
 
-## State (2026-10-30)
+## State (2026-11-03)
 
 | Part | State |
 |---|---|
-| Contract `contracts/RateRegistry.sol` | done; 11 tests pass |
+| Contract `contracts/RateRegistry.sol` | done; 16 tests pass; revocation bound to block time, root delay and veto, supersedes, overlap rejection, batch commit |
 | Besu IBFT 2.0 network, 4 validators | done; `besu/docker-compose.yml` |
 | Python client, EIP-712 signing | done; `coral/` |
-| Provider MRF parser | done; tested on one real 141 MB file |
-| Payer TiC parser | written; not yet run on a real file |
+| Provider MRF parser | done; unit and billing class in the key; run on five real files |
+| Payer TiC parser | done; run on one real Aetna file (1.69 GB gz) |
 | Web app: provider/payer and CMS views | done; `app/` |
-| Evaluation on real provider lines | 200 records; `results/evaluate_provider.json` |
-| Payer-side real data | not started |
-| Paper body | not started |
+| Full-sheet run (one provider, 30 payers) | `results/evaluate_sheet.json` |
+| Five providers vs Aetna on 16 codes, synthetic attribution | `results/evaluate_pairs.json` |
+| Paper body | written; references verified; cut to 10 pages pending |
 
 ## Run
 
@@ -31,35 +32,37 @@ cd besu && docker compose up -d && cd ..    # 4 Besu validators, RPC on :8545
 .venv/bin/uvicorn app.server:app --port 8000
 ```
 
-Open http://127.0.0.1:8000. `/party`: all negotiated rates on the ledger, with filters; pending, propose, chargemaster, keys. `/cms`: registry and verify a published file.
+Open http://127.0.0.1:8000. `/party`: all negotiated rates on the ledger, one search box; pending, propose, chargemaster, keys. `/cms`: registry and verify a published file.
 
-Evaluation on a real provider file:
+Evaluation:
 
 ```
-.venv/bin/python scripts/evaluate_provider.py data/raw/<provider>_standardcharges.csv \
-  --provider TIN:84-0398876 --npi 1790787307 --payer-name "United Healthcare" \
-  --plan-name "Broad Networks" --payer PAYER:UHC --plan "Broad Networks" -n 200
+.venv/bin/python scripts/evaluate_sheet.py data/raw/<provider>_standardcharges.csv --provider TIN:84-0398876 --batch 100 --inflight 8
+.venv/bin/python scripts/evaluate_pairs.py data/raw/tic/<aetna in-network>.json.gz
+.venv/bin/python scripts/make_numbers.py && pdflatex abstract.tex
 ```
 
-Provider files are found through `https://<provider domain>/cms-hpt.txt`.
+Provider files are found through `https://<provider domain>/cms-hpt.txt`. Payer file indexes: see `notes.tex`, Data.
 
 ## Layout
 
 ```
-contracts/RateRegistry.sol   registry: entities, delegations, revocations, rates, chargemaster versions
+contracts/RateRegistry.sol   registry: entities, delegations, revocations, root replacement, rates, chargemaster versions
 coral/typed.py               EIP-712 types and signing
 coral/chain.py               ledger client (eth-tester or Besu RPC), RateIndex
 coral/verify.py              one check: does a published line match a signed record
-coral/mrf.py                 provider CSV and payer JSON parsers
-coral/match.py               pair provider and payer lines, agreement statistics
+coral/mrf.py                 provider CSV and payer JSON parsers; Skipped counts
+coral/match.py               pair provider and payer lines, agreement statistics, attribution
 app/                         FastAPI server and static pages
 besu/                        genesis, validator keys, docker-compose
 scripts/bootstrap.py         deploy and register demo entities
 scripts/seed_examples.py     sign the ten example rates and the chargemaster hash
+scripts/evaluate_sheet.py    sign a whole provider sheet; cost; verify clean and altered copies
+scripts/evaluate_pairs.py    five providers vs one payer file on the 16 Trilliant codes; synthetic attribution
+scripts/make_numbers.py      results/*.json -> numbers.tex
 data/examples.json           ten rates copied from the UCHealth file; version labels are examples
-scripts/evaluate_provider.py sign real lines, verify clean and tampered copies
 tests/                       contract and verifier tests
-results/                     evaluation output
+results/                     run output
 ```
 
 Keys in `build/keys.json` are prototype keys written in clear. A deployment

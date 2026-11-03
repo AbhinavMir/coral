@@ -34,13 +34,16 @@
     <label>Billing NPI <input name="npi" required pattern="\d{10}"></label>
     <label>Code <input name="code" required placeholder="CPT:70450 / MS-DRG:470"></label>
     <label>Modifier <input name="modifier"></label>
-    <label>Setting <select name="setting"><option>outpatient</option><option>inpatient</option><option>professional</option></select></label>
+    <label>Setting <select name="setting"><option>outpatient</option><option>inpatient</option></select></label>
+    <label>Billing class <select name="billingClass"><option>facility</option><option>professional</option></select></label>
+    <label>Drug unit (empty = none) <input name="unit" placeholder="1 ML"></label>
     <label>Formula <select name="formula"><option value="fixed">fixed dollar</option><option value="percent_of_charges">percent of charges</option><option value="percent_of_reference">percent of reference schedule</option></select></label>
     <label>Value ($ or %) <input name="value" type="number" step="0.01" required></label>
     <label>Start <input name="start" type="date" required></label>
     <label>End (empty = open) <input name="end" type="date"></label>
     <label>Contract <input name="contractVersion" required placeholder="agreement or amendment id"></label>
-    <label class="full">Chargemaster version (percent-of-charges rates only) <input name="referenceVersion"></label>
+    <label>Chargemaster version (percent-of-charges rates only) <input name="referenceVersion"></label>
+    <label>Replaces record (empty = new) <input name="supersedes" class="mono" placeholder="0x…"></label>
     <div class="full"><button class="primary" type="submit">Sign and propose</button> <span id="proposeMsg" class="muted"></span></div>
   </form>
 </section>
@@ -97,7 +100,7 @@ async function init(){
   $('#exampleSel').innerHTML='<option value="">—</option>'+EX.rates.map((r,i)=>`<option value="${i}">${r.code} ${r.setting} · ${r.payer} / ${r.plan} · ${r.formula==='fixed'?'$'+r.value.toFixed(2):r.value.toFixed(2)+'% of charges'}</option>`).join('');
   $('#exampleSel').onchange=()=>{const r=EX.rates[$('#exampleSel').value];if(!r)return;const f=$('#proposeForm');
     f.providerId.value=EX.providerId;f.payerId.value=EX.payers[r.payer];f.planId.value=r.plan;f.npi.value=EX.npi;f.code.value=r.code;f.modifier.value='';
-    f.setting.value=r.setting;f.formula.value=r.formula;f.value.value=r.value.toFixed(2);f.start.value=EX.start;f.end.value='';
+    f.setting.value=r.setting;f.billingClass.value='facility';f.unit.value=r.unit||'';f.supersedes.value='';f.formula.value=r.formula;f.value.value=r.value.toFixed(2);f.start.value=EX.start;f.end.value='';
     f.contractVersion.value=EX.contractVersion[r.payer];f.referenceVersion.value=r.formula==='fixed'?'':EX.chargemaster.version;
     $('#exampleNote').textContent=r.description+(r.gross?` · list price ${r.gross.toFixed(2)} → ${r.amount.toFixed(2)}`:'')+' · '+r.methodology;};
   $('#cdmForm').version.value=EX.chargemaster.version;
@@ -106,16 +109,16 @@ async function init(){
   refresh();
 }
 
-function matches(r,q){if(!q)return true;const hay=[r.id,nameOf(r.providerId),nameOf(r.payerId),r.planId,r.code,r.contractVersion,r.referenceVersion,r.setting,r.formula==='fixed'?'fixed':'percent'].join(' ').toLowerCase();return q.split(/\s+/).every(t=>hay.includes(t));}
+function matches(r,q){if(!q)return true;const hay=[r.id,nameOf(r.providerId),nameOf(r.payerId),r.planId,r.code,r.contractVersion,r.referenceVersion,r.setting,r.billingClass,r.unit,r.formula==='fixed'?'fixed':'percent',r.supersededBy?'superseded':'live'].join(' ').toLowerCase();return q.split(/\s+/).every(t=>hay.includes(t));}
 function drawRates(){
   const q=$('#q').value.trim().toLowerCase();
   const rows=RATES.filter(r=>matches(r,q));
   $('#ratesCount').textContent=`${rows.length} of ${RATES.length}`;
   $('#ratesList').innerHTML=rows.map(r=>`<li>
-    <span class="code">${r.code}${r.modifier?'-'+r.modifier:''}</span>
+    <span class="code">${r.code}${r.modifier?'-'+r.modifier:''}${r.unit?' <span class="muted">'+r.unit+'</span>':''}</span>
     <span>${nameOf(r.providerId)} · ${nameOf(r.payerId)} · ${r.planId}</span>
-    <span class="amt">${rateText(r)}</span><span class="muted">${r.setting}</span>
-    <details><summary class="muted">${short(r.id)}</summary><div class="mono muted">record ${r.id}<br>effective ${fmtD(r.start)} → ${fmtD(r.end)} · ${r.contractVersion}<br>provider signer ${r.providerSigner}<br>payer signer ${r.payerSigner}<br>committed ${fmtT(r.committedAt)}</div></details>
+    <span class="amt">${rateText(r)}</span><span class="muted">${r.setting}${r.supersededBy?' · superseded':''}</span>
+    <details><summary class="muted">${short(r.id)}</summary><div class="mono muted">record ${r.id}<br>effective ${fmtD(r.start)} → ${fmtD(r.effectiveEnd)}${r.supersededBy?' · superseded by '+r.supersededBy:''}${r.supersedes?' · replaces '+r.supersedes:''} · ${r.contractVersion} · ${r.billingClass}<br>provider signer ${r.providerSigner}<br>payer signer ${r.payerSigner}<br>committed ${fmtT(r.committedAt)}</div></details>
   </li>`).join('')||'<li class="muted">no records match</li>';
 }
 
