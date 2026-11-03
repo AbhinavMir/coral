@@ -18,6 +18,15 @@ def key(ln: Line) -> tuple:
     return ln.key()
 
 
+def values(h: Line, p: Line) -> tuple[int, int] | None:
+    """The two values when both lines carry the same kind of value (dollars or percent), else None."""
+    if h.amount_cents is not None and p.amount_cents is not None:
+        return h.amount_cents, p.amount_cents
+    if h.percent_bp is not None and p.percent_bp is not None:
+        return h.percent_bp, p.percent_bp
+    return None
+
+
 @dataclass
 class Pair:
     key: tuple
@@ -25,35 +34,42 @@ class Pair:
     payer: Line
 
     @property
+    def values(self) -> tuple[int, int] | None:
+        return values(self.provider, self.payer)
+
+    @property
     def ratio(self) -> float | None:
-        a, b = self.provider.amount_cents, self.payer.amount_cents
-        if a is None or b is None or b == 0:
+        v = self.values
+        if v is None or v[1] == 0:
             return None
-        return a / b
+        return v[0] / v[1]
 
 
 @dataclass
 class Stats:
     pairs: int = 0
+    comparable: int = 0
     exact: int = 0
     within_10: int = 0
     over_50: int = 0
-    no_amount: int = 0
+    not_comparable: int = 0
     attribution: dict = field(default_factory=lambda: defaultdict(int))
 
     def row(self) -> dict:
-        n = self.pairs or 1
+        n = self.comparable or 1
         return {
             "pairs": self.pairs,
+            "comparable": self.comparable,
             "exact_pct": round(100 * self.exact / n, 1),
             "within_10_pct": round(100 * self.within_10 / n, 1),
             "over_50_pct": round(100 * self.over_50 / n, 1),
-            "no_amount": self.no_amount,
+            "not_comparable": self.not_comparable,
             "attribution": dict(self.attribution),
         }
 
 
 def pair_lines(provider: list[Line], payer: list[Line]) -> list[Pair]:
+    """Every provider line with every payer line of the same key."""
     by_key = defaultdict(list)
     for ln in payer:
         by_key[key(ln)].append(ln)
@@ -64,6 +80,26 @@ def pair_lines(provider: list[Line], payer: list[Line]) -> list[Pair]:
     return out
 
 
+def pair_keys(provider: list[Line], payer: list[Line]) -> list[Pair]:
+    """One pair per provider line: the comparable payer line nearest to it, else the first payer line of the key.
+    A payer file that lists several plans under one crosswalk label gives several values per key."""
+    by_key = defaultdict(list)
+    for ln in payer:
+        by_key[key(ln)].append(ln)
+    out = []
+    for h in provider:
+        cands = by_key.get(key(h), [])
+        if not cands:
+            continue
+        best = None
+        for p in cands:
+            r = Pair(key(h), h, p).ratio
+            if r is not None and (best is None or abs(r - 1) < best[0]):
+                best = (abs(r - 1), p)
+        out.append(Pair(key(h), h, best[1] if best else cands[0]))
+    return out
+
+
 def measure(pairs: list[Pair], verdicts: dict[tuple, tuple[Verdict, Verdict]] | None = None) -> Stats:
     """verdicts: pair key -> (provider verdict, payer verdict) from coral.verify, when the ledger is in use."""
     s = Stats()
@@ -71,9 +107,10 @@ def measure(pairs: list[Pair], verdicts: dict[tuple, tuple[Verdict, Verdict]] | 
         s.pairs += 1
         r = p.ratio
         if r is None:
-            s.no_amount += 1
+            s.not_comparable += 1
         else:
-            if p.provider.amount_cents == p.payer.amount_cents:
+            s.comparable += 1
+            if p.values[0] == p.values[1]:
                 s.exact += 1
             if abs(r - 1) <= 0.10:
                 s.within_10 += 1

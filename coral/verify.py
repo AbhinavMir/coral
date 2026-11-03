@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .chain import Chain, RateRecord
+from .typed import keyform
 
 
 @dataclass
@@ -30,8 +31,9 @@ class Line:
     gross_charge_cents: int | None = None  # provider file only
 
     def key(self) -> tuple:
-        return (self.payerId, self.planId, self.providerId, self.npi, self.code, self.modifier_,
-                self.setting, self.billingClass, self.unit)
+        """Identifiers over 32 bytes are stored hashed on the ledger; keyform applies the same form here."""
+        return (keyform(self.payerId), keyform(self.planId), keyform(self.providerId), keyform(self.npi),
+                keyform(self.code), keyform(self.modifier_), self.setting, self.billingClass, keyform(self.unit))
 
 
 @dataclass

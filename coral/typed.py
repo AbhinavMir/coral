@@ -74,7 +74,20 @@ def b32(text: str) -> bytes:
 
 
 def unb32(b: bytes) -> str:
-    return bytes(b).rstrip(b"\0").decode(errors="replace")
+    """Inverse of b32. A hashed identifier (not valid text) comes back as hex, so a
+    key built from the ledger and a key built from a file compare equal through keyform."""
+    try:
+        return bytes(b).rstrip(b"\0").decode()
+    except UnicodeDecodeError:
+        return "0x" + bytes(b).hex()
+
+
+def keyform(text: str) -> str:
+    """The form of an identifier as the ledger returns it: itself, or hex of its hash when over 32 bytes.
+    Idempotent: a value already in hash form is returned unchanged."""
+    if len(text) == 66 and text.startswith("0x"):
+        return text
+    return unb32(b32(text))
 
 
 @dataclass
@@ -97,8 +110,8 @@ class Rate:
     supersedes: bytes = b"\0" * 32  # id of the record this one replaces
 
     def key(self) -> tuple:
-        return (self.payerId, self.planId, self.providerId, self.npi, self.code, self.modifier_,
-                self.setting, self.billingClass, self.unit)
+        return (keyform(self.payerId), keyform(self.planId), keyform(self.providerId), keyform(self.npi),
+                keyform(self.code), keyform(self.modifier_), self.setting, self.billingClass, keyform(self.unit))
 
     def message(self) -> dict:
         d = asdict(self)

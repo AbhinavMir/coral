@@ -17,9 +17,10 @@ notes in `notes.tex`, run numbers in `numbers.tex` written by `scripts/make_numb
 | Provider MRF parser | done; unit and billing class in the key; run on five real files |
 | Payer TiC parser | done; run on one real Aetna file (1.69 GB gz) |
 | Web app: provider/payer and CMS views | done; `app/` |
-| Full-sheet run (one provider, 30 payers) | `results/evaluate_sheet.json` |
-| Five providers vs Aetna on 16 codes, synthetic attribution | `results/evaluate_pairs.json` |
-| Paper body | written; references verified; cut to 10 pages pending |
+| Full-sheet run (one provider, 20 payers) | done; `results/evaluate_sheet.json`: 262,535 records, 61 records/s, verify 363,690 lines in 1.3 s |
+| Five providers vs Aetna on 16 codes, synthetic attribution | done; `results/evaluate_pairs.json`: 52 pairs, 33 comparable, 45.5% exact |
+| Key lifecycle on the network | done; `results/key_events.json` |
+| Paper | complete; body 8 pages, 23 references, notes appended; numbers from `numbers.tex` |
 
 ## Run
 
@@ -39,7 +40,8 @@ Evaluation:
 ```
 .venv/bin/python scripts/evaluate_sheet.py data/raw/<provider>_standardcharges.csv --provider TIN:84-0398876 --batch 100 --inflight 8
 .venv/bin/python scripts/evaluate_pairs.py data/raw/tic/<aetna in-network>.json.gz
-.venv/bin/python scripts/make_numbers.py && pdflatex abstract.tex
+.venv/bin/python scripts/key_events.py           # rotates the Aetna signing key in build/keys.json
+.venv/bin/python scripts/make_numbers.py && pdflatex abstract.tex && pdflatex abstract.tex
 ```
 
 Provider files are found through `https://<provider domain>/cms-hpt.txt`. Payer file indexes: see `notes.tex`, Data.
@@ -57,8 +59,9 @@ app/                         FastAPI server and static pages
 besu/                        genesis, validator keys, docker-compose
 scripts/bootstrap.py         deploy and register demo entities
 scripts/seed_examples.py     sign the ten example rates and the chargemaster hash
-scripts/evaluate_sheet.py    sign a whole provider sheet; cost; verify clean and altered copies
+scripts/evaluate_sheet.py    sign a whole provider sheet; cost; verify clean and altered copies (--skip-commit: verify only)
 scripts/evaluate_pairs.py    five providers vs one payer file on the 16 Trilliant codes; synthetic attribution
+scripts/key_events.py        key lifecycle on the running network: revoke, rotate, root delay and veto
 scripts/make_numbers.py      results/*.json -> numbers.tex
 data/examples.json           ten rates copied from the UCHealth file; version labels are examples
 tests/                       contract and verifier tests

@@ -24,42 +24,64 @@ def main():
         cmd("sheetAlgorithm", n(s["algorithm_only"])), cmd("sheetCollisions", n(s["key_collisions"])),
         cmd("sheetPayers", s["payers"]), cmd("sheetBatch", s["batch"]), cmd("sheetTx", n(s["transactions"])),
         cmd("sheetSignS", f"{s['sign_s']:.0f}"), cmd("sheetSigPerS", n(round(s["signatures_per_s"]))),
-        cmd("sheetCommitS", f"{s['commit_s']:.0f}"), cmd("sheetCommitMin", f"{s['commit_s']/60:.1f}"),
+        cmd("sheetCommitS", n(round(s['commit_s']))), cmd("sheetCommitRun", n(s["committed_this_run"])),
+        cmd("sheetCommitMin", f"{s['records']/s['records_per_s']/60:.1f}"),
         cmd("sheetRecPerS", n(round(s["records_per_s"]))),
         cmd("sheetGas", n(round(s["gas_per_record"]))), cmd("sheetBytes", n(round(s["calldata_bytes_per_record"]))),
         cmd("sheetCalldataMB", f"{s['calldata_bytes_total']/1e6:.0f}"),
-        cmd("sheetDiskMB", f"{(s['validator_disk_bytes_after']-s['validator_disk_bytes_before'])/1e6:.0f}"),
+        cmd("sheetDiskMB", n(round((s['validator_disk_bytes_after']-s['validator_disk_bytes_before'])/s['committed_this_run']*s['records']/1e6))),
+        cmd("sheetDiskBytes", n(round((s['validator_disk_bytes_after']-s['validator_disk_bytes_before'])/s['committed_this_run']))),
         cmd("sheetLoadS", f"{s['index_load_s']:.0f}"), cmd("sheetVerifyLines", n(s["verify_lines"])),
         cmd("sheetVerifyS", f"{s['verify_s']:.1f}"), cmd("sheetLinesPerS", n(round(s["lines_per_s"]))),
         cmd("sheetCleanMatch", n(s["clean"].get("match", 0))), cmd("sheetCleanDiffers", n(s["clean"].get("amount_differs", 0))),
         cmd("sheetCleanOther", n(sum(v for k, v in s["clean"].items() if k not in ("match", "amount_differs")))),
         cmd("sheetAltered", n(s["altered"])), cmd("sheetCaught", n(s["caught"])),
+        cmd("sheetAlreadyDiffers", n(s["altered_already_differs"])), cmd("sheetNotComparable", n(s["altered_not_comparable"])),
+        cmd("sheetCleanNeedsCM", n(s["clean"].get("needs_chargemaster", 0))),
     ]
+    # the body says no altered row that matched before the change matched after it
+    assert s["altered_still_match"] == 0, s["altered_still_match"]
+    assert s["caught"] + s["altered_already_differs"] + s["altered_not_comparable"] == s["altered"]
+    # commit rate over the first 20,000 records of the run, from the progress log
+    early = [ln for ln in (R / "evaluate_sheet.log").read_text().splitlines() if ln.strip().startswith("20800/")]
+    out.append(cmd("sheetRecPerSEarly", early[0].split("committed, ")[1].split(" records/s")[0]))
     p = json.loads((R / "evaluate_pairs.json").read_text())
     r = p["real"]
+    a, al = r["all_providers"], r["all_providers_lines"]
+
+    def pct(x, k):
+        return f"{x[k]}" if x["comparable"] else "--"
+
     out += [
         cmd("pairProviders", len(p["providers"])), cmd("pairPayerLines", n(p["payer_lines"])),
-        cmd("pairPayerUnique", n(p["payer_lines_unique"])),
-        cmd("pairAll", n(r["all_providers"]["pairs"])), cmd("pairExact", r["all_providers"]["exact_pct"]),
-        cmd("pairWithinTen", r["all_providers"]["within_10_pct"]), cmd("pairOverFifty", r["all_providers"]["over_50_pct"]),
+        cmd("pairPayerUnique", n(p["payer_lines_unique"])), cmd("pairValuesPerKey", r["payer_values_per_paired_key"]),
+        cmd("pairAll", n(a["pairs"])), cmd("pairComparable", n(a["comparable"])), cmd("pairNotComparable", n(a["not_comparable"])),
+        cmd("pairExact", a["exact_pct"]), cmd("pairWithinTen", a["within_10_pct"]), cmd("pairOverFifty", a["over_50_pct"]),
+        cmd("pairLineComparable", n(al["comparable"])), cmd("pairLineExact", al["exact_pct"]),
     ]
+    short = {"TIN:84-0398876": "UCHealth Yampa Valley", "TIN:46-0796114": "UCHealth Memorial Central",
+             "TIN:36-2169147": "Advocate Christ", "TIN:93-1176109": "OHSU", "TIN:94-0562680": "Alta Bates Summit"}
     rows = []
     for tin, m in p["providers"].items():
+        m = dict(m, name=short.get(tin, m["name"]))
         x = r[tin]
-        rows.append(f"{m['name']} & {m['dated']} & {m['codes_present']} & {x['provider_keys']} & {x['payer_keys_for_provider']} & {x['pairs']} & "
-                    f"{x['all']['exact_pct']} & {x['all']['within_10_pct']} & {x['all']['over_50_pct']} \\\\")
+        rows.append(f"{m['name'].replace('&', chr(92) + '&')} & {m['dated']} & {m['codes_present']} & {x['provider_keys']} & {x['payer_keys_for_provider']} & "
+                    f"{x['pairs']} & {x['all']['comparable']} & {pct(x['all'], 'exact_pct')} & {pct(x['all'], 'within_10_pct')} & "
+                    f"{pct(x['all'], 'over_50_pct')} \\\\")
     out.append("\\newcommand{\\pairRows}{" + "\n".join(rows) + "}\n")
     grows = []
     for g, label in (("inpatient", "Inpatient (8 MS-DRG)"), ("gi", "GI (5 CPT)"), ("ortho", "Orthopedic (3 CPT)")):
-        agg = {"pairs": 0, "exact": 0, "within": 0, "over": 0}
+        agg = {"pairs": 0, "comparable": 0, "exact": 0, "within": 0, "over": 0}
         for tin in p["providers"]:
             x = r[tin]["groups"][g]
             agg["pairs"] += x["pairs"]
-            agg["exact"] += x["exact_pct"] * x["pairs"] / 100
-            agg["within"] += x["within_10_pct"] * x["pairs"] / 100
-            agg["over"] += x["over_50_pct"] * x["pairs"] / 100
-        k = agg["pairs"] or 1
-        grows.append(f"{label} & {agg['pairs']} & {100*agg['exact']/k:.1f} & {100*agg['within']/k:.1f} & {100*agg['over']/k:.1f} \\\\")
+            agg["comparable"] += x["comparable"]
+            agg["exact"] += x["exact_pct"] * x["comparable"] / 100
+            agg["within"] += x["within_10_pct"] * x["comparable"] / 100
+            agg["over"] += x["over_50_pct"] * x["comparable"] / 100
+        k = agg["comparable"]
+        pcts = f"{100*agg['exact']/k:.1f} & {100*agg['within']/k:.1f} & {100*agg['over']/k:.1f}" if k else "-- & -- & --"
+        grows.append(f"{label} & {agg['pairs']} & {agg['comparable']} & {pcts} \\\\")
     out.append("\\newcommand{\\pairGroupRows}{" + "\n".join(grows) + "}\n")
     sy = p["synthetic"]
     t, res = sy["truth"], sy["result"]

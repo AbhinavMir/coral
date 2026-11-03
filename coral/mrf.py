@@ -162,8 +162,10 @@ def payer_json(path: Path, payer_id: str, plan_id: str, provider_map: dict[str, 
     provider_references are resolved from the top-level provider_references array on a first
     pass. A reference served by a `location` URL instead of inline groups is not fetched; prices
     that point only to such references are counted as provider_reference_remote and dropped.
-    A price with no place of service (service_code) has no setting and is counted as
-    setting_unknown; the parser does not guess outpatient.
+    A professional price with no place of service (service_code) has no setting and is
+    counted as setting_unknown. An institutional price has no place of service in the
+    schema: a DRG is inpatient; any other code yields one line per setting, as the CMS
+    file's "both" does, and is counted as setting_both_assumed.
     """
     skipped = skipped if skipped is not None else Skipped()
     opener = gzip.open if path.suffix == ".gz" else open
@@ -198,7 +200,8 @@ def payer_json(path: Path, payer_id: str, plan_id: str, provider_map: dict[str, 
                         skipped.add("provider_reference_remote")
                     continue
                 for price in nr.get("negotiated_prices", []):
-                    bc = (price.get("billing_class") or "").lower()
+                    # TiC billing_class is "professional" or "institutional"; the CMS file says facility
+                    bc = (price.get("billing_class") or "").lower().replace("institutional", "facility")
                     if bc not in BILLING_CLASS:
                         skipped.add("billing_class_unknown")
                         continue
@@ -209,6 +212,12 @@ def payer_json(path: Path, payer_id: str, plan_id: str, provider_map: dict[str, 
                         setting = SETTING["outpatient"]
                     elif codes & POS_INPATIENT:
                         setting = None   # both: emit one line per setting
+                    elif code.startswith("MS-DRG:") or code.startswith("DRG:"):
+                        setting = SETTING["inpatient"]   # a DRG prices an admission
+                    elif bc == "facility":
+                        # institutional prices carry no place of service; treat as the CMS file's "both"
+                        skipped.add("setting_both_assumed")
+                        setting = None
                     else:
                         skipped.add("setting_unknown")
                         continue

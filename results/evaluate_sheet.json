@@ -1,0 +1,50 @@
+{
+  "file": "840398876_yampa-valley-medical-center_standardcharges.csv",
+  "provider": "TIN:84-0398876",
+  "npi": "1790787307",
+  "lines": 467811,
+  "parse_s": 4.053515911102295,
+  "records": 262535,
+  "fixed": 201394,
+  "percent": 61141,
+  "algorithm_only": 104121,
+  "key_collisions": 14432,
+  "already_on_ledger": 75510,
+  "committed_this_run": 187025,
+  "skipped": {
+    "no_billing_code": 165513
+  },
+  "payers": 20,
+  "batch": 100,
+  "inflight": 8,
+  "sign_s": 202.00375127792358,
+  "signatures_per_s": 1851.6982859658353,
+  "commit_s": 3089.5829627513885,
+  "records_per_s": 60.534059856883495,
+  "transactions": 1871,
+  "gas_per_record": 310367.3027028472,
+  "gas_per_tx_mean": 31024289.036878675,
+  "calldata_bytes_per_record": 833.9607859911777,
+  "calldata_bytes_total": 155971516,
+  "validator_disk_bytes_before": 2520748032,
+  "validator_disk_bytes_after": 5876994048,
+  "index_load_s": 572.186595916748,
+  "verify_lines": 363690,
+  "verify_s": 1.2576699256896973,
+  "lines_per_s": 289177.62329456594,
+  "clean": {
+    "match": 349258,
+    "amount_differs": 14006,
+    "needs_chargemaster": 426
+  },
+  "tampered": {
+    "match": 345804,
+    "amount_differs": 17460,
+    "needs_chargemaster": 426
+  },
+  "altered": 3584,
+  "caught": 3454,
+  "altered_already_differs": 128,
+  "altered_not_comparable": 2,
+  "altered_still_match": 0
+}

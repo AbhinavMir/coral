@@ -1,0 +1,397 @@
+{
+  "payer_file": "2026-10-05_pl-1s7-tr25_Aetna-Life-Insurance-Company.json.gz",
+  "plan_crosswalk": "Aetna commercial",
+  "codes": {
+    "inpatient": [
+      "MS-DRG:189",
+      "MS-DRG:190",
+      "MS-DRG:193",
+      "MS-DRG:280",
+      "MS-DRG:291",
+      "MS-DRG:392",
+      "MS-DRG:552",
+      "MS-DRG:641"
+    ],
+    "gi": [
+      "CPT:43239",
+      "CPT:45380",
+      "CPT:45385",
+      "CPT:47562",
+      "CPT:49650"
+    ],
+    "ortho": [
+      "CPT:29827",
+      "CPT:29881",
+      "CPT:29916"
+    ]
+  },
+  "providers": {
+    "TIN:84-0398876": {
+      "name": "UCHealth Yampa Valley Medical Center",
+      "file": "840398876_yampa-valley-medical-center_standardcharges.csv",
+      "dated": "2025-11-01",
+      "npis": [
+        "1790787307"
+      ],
+      "lines": 0,
+      "codes_present": 0
+    },
+    "TIN:46-0796114": {
+      "name": "UCHealth Memorial Hospital Central",
+      "file": "460796114-1144397134_uchmhs_standardcharges.csv",
+      "dated": "2025-11-01",
+      "npis": [
+        "1144397134"
+      ],
+      "lines": 25,
+      "codes_present": 16
+    },
+    "TIN:36-2169147": {
+      "name": "Advocate Christ Medical Center",
+      "file": "362169147_advocate-christ-medical-center_standardcharges.csv",
+      "dated": "2026-11-03",
+      "npis": [
+        "1548375082",
+        "1386188068",
+        "1922542604"
+      ],
+      "lines": 8,
+      "codes_present": 8
+    },
+    "TIN:93-1176109": {
+      "name": "Oregon Health & Science University",
+      "file": "931176109_Oregon-Health-and-Science-University_standardcharges.csv",
+      "dated": "2026-03-23",
+      "npis": [
+        "1609824010"
+      ],
+      "lines": 46,
+      "codes_present": 16
+    },
+    "TIN:94-0562680": {
+      "name": "Alta Bates Summit Medical Center, Summit campus",
+      "file": "940562680-1295181477_alta-bates-summit-medical-center-summit-campus_standardcharges.csv",
+      "dated": "2026-04-01",
+      "npis": [
+        "1194171371",
+        "1215344965",
+        "1295181477",
+        "1447604814",
+        "1457489502",
+        "1740279959",
+        "1861582645",
+        "1922180827"
+      ],
+      "lines": 9,
+      "codes_present": 8
+    }
+  },
+  "payer_lines": 468,
+  "payer_lines_unique": 232,
+  "payer_skipped": {},
+  "real": {
+    "TIN:84-0398876": {
+      "pairs": 0,
+      "provider_keys": 0,
+      "payer_keys_for_provider": 44,
+      "all": {
+        "pairs": 0,
+        "comparable": 0,
+        "exact_pct": 0.0,
+        "within_10_pct": 0.0,
+        "over_50_pct": 0.0,
+        "not_comparable": 0,
+        "attribution": {}
+      },
+      "lines": {
+        "pairs": 0,
+        "comparable": 0,
+        "exact_pct": 0.0,
+        "within_10_pct": 0.0,
+        "over_50_pct": 0.0,
+        "not_comparable": 0,
+        "attribution": {}
+      },
+      "groups": {
+        "inpatient": {
+          "pairs": 0,
+          "comparable": 0,
+          "exact_pct": 0.0,
+          "within_10_pct": 0.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        },
+        "gi": {
+          "pairs": 0,
+          "comparable": 0,
+          "exact_pct": 0.0,
+          "within_10_pct": 0.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        },
+        "ortho": {
+          "pairs": 0,
+          "comparable": 0,
+          "exact_pct": 0.0,
+          "within_10_pct": 0.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        }
+      }
+    },
+    "TIN:46-0796114": {
+      "pairs": 25,
+      "provider_keys": 19,
+      "payer_keys_for_provider": 73,
+      "all": {
+        "pairs": 25,
+        "comparable": 19,
+        "exact_pct": 57.9,
+        "within_10_pct": 94.7,
+        "over_50_pct": 0.0,
+        "not_comparable": 6,
+        "attribution": {}
+      },
+      "lines": {
+        "pairs": 47,
+        "comparable": 31,
+        "exact_pct": 35.5,
+        "within_10_pct": 58.1,
+        "over_50_pct": 6.5,
+        "not_comparable": 16,
+        "attribution": {}
+      },
+      "groups": {
+        "inpatient": {
+          "pairs": 8,
+          "comparable": 8,
+          "exact_pct": 12.5,
+          "within_10_pct": 100.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        },
+        "gi": {
+          "pairs": 14,
+          "comparable": 8,
+          "exact_pct": 87.5,
+          "within_10_pct": 87.5,
+          "over_50_pct": 0.0,
+          "not_comparable": 6,
+          "attribution": {}
+        },
+        "ortho": {
+          "pairs": 3,
+          "comparable": 3,
+          "exact_pct": 100.0,
+          "within_10_pct": 100.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        }
+      }
+    },
+    "TIN:36-2169147": {
+      "pairs": 8,
+      "provider_keys": 8,
+      "payer_keys_for_provider": 16,
+      "all": {
+        "pairs": 8,
+        "comparable": 8,
+        "exact_pct": 37.5,
+        "within_10_pct": 100.0,
+        "over_50_pct": 0.0,
+        "not_comparable": 0,
+        "attribution": {}
+      },
+      "lines": {
+        "pairs": 8,
+        "comparable": 8,
+        "exact_pct": 37.5,
+        "within_10_pct": 100.0,
+        "over_50_pct": 0.0,
+        "not_comparable": 0,
+        "attribution": {}
+      },
+      "groups": {
+        "inpatient": {
+          "pairs": 8,
+          "comparable": 8,
+          "exact_pct": 37.5,
+          "within_10_pct": 100.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        },
+        "gi": {
+          "pairs": 0,
+          "comparable": 0,
+          "exact_pct": 0.0,
+          "within_10_pct": 0.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        },
+        "ortho": {
+          "pairs": 0,
+          "comparable": 0,
+          "exact_pct": 0.0,
+          "within_10_pct": 0.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        }
+      }
+    },
+    "TIN:93-1176109": {
+      "pairs": 16,
+      "provider_keys": 46,
+      "payer_keys_for_provider": 24,
+      "all": {
+        "pairs": 16,
+        "comparable": 5,
+        "exact_pct": 0.0,
+        "within_10_pct": 100.0,
+        "over_50_pct": 0.0,
+        "not_comparable": 11,
+        "attribution": {}
+      },
+      "lines": {
+        "pairs": 24,
+        "comparable": 10,
+        "exact_pct": 0.0,
+        "within_10_pct": 100.0,
+        "over_50_pct": 0.0,
+        "not_comparable": 14,
+        "attribution": {}
+      },
+      "groups": {
+        "inpatient": {
+          "pairs": 8,
+          "comparable": 0,
+          "exact_pct": 0.0,
+          "within_10_pct": 0.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 8,
+          "attribution": {}
+        },
+        "gi": {
+          "pairs": 5,
+          "comparable": 2,
+          "exact_pct": 0.0,
+          "within_10_pct": 100.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 3,
+          "attribution": {}
+        },
+        "ortho": {
+          "pairs": 3,
+          "comparable": 3,
+          "exact_pct": 0.0,
+          "within_10_pct": 100.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        }
+      }
+    },
+    "TIN:94-0562680": {
+      "pairs": 3,
+      "provider_keys": 8,
+      "payer_keys_for_provider": 18,
+      "all": {
+        "pairs": 3,
+        "comparable": 1,
+        "exact_pct": 100.0,
+        "within_10_pct": 100.0,
+        "over_50_pct": 0.0,
+        "not_comparable": 2,
+        "attribution": {}
+      },
+      "lines": {
+        "pairs": 3,
+        "comparable": 1,
+        "exact_pct": 100.0,
+        "within_10_pct": 100.0,
+        "over_50_pct": 0.0,
+        "not_comparable": 2,
+        "attribution": {}
+      },
+      "groups": {
+        "inpatient": {
+          "pairs": 3,
+          "comparable": 1,
+          "exact_pct": 100.0,
+          "within_10_pct": 100.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 2,
+          "attribution": {}
+        },
+        "gi": {
+          "pairs": 0,
+          "comparable": 0,
+          "exact_pct": 0.0,
+          "within_10_pct": 0.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        },
+        "ortho": {
+          "pairs": 0,
+          "comparable": 0,
+          "exact_pct": 0.0,
+          "within_10_pct": 0.0,
+          "over_50_pct": 0.0,
+          "not_comparable": 0,
+          "attribution": {}
+        }
+      }
+    },
+    "all_providers": {
+      "pairs": 52,
+      "comparable": 33,
+      "exact_pct": 45.5,
+      "within_10_pct": 97.0,
+      "over_50_pct": 0.0,
+      "not_comparable": 19,
+      "attribution": {}
+    },
+    "all_providers_lines": {
+      "pairs": 82,
+      "comparable": 50,
+      "exact_pct": 30.0,
+      "within_10_pct": 74.0,
+      "over_50_pct": 4.0,
+      "not_comparable": 32,
+      "attribution": {}
+    },
+    "payer_values_per_paired_key": 1.53
+  },
+  "synthetic": {
+    "keys": 28,
+    "records_signed": 28,
+    "signed_this_run": 0,
+    "truth": {
+      "provider_altered": 4,
+      "payer_altered": 3,
+      "both_altered": 1
+    },
+    "result": {
+      "pairs": 28,
+      "comparable": 28,
+      "exact_pct": 71.4,
+      "within_10_pct": 78.6,
+      "over_50_pct": 3.6,
+      "not_comparable": 0,
+      "attribution": {
+        "both_match_record": 20,
+        "payer_file_departs": 3,
+        "provider_file_departs": 4,
+        "amount_differs/amount_differs": 1
+      }
+    }
+  }
+}

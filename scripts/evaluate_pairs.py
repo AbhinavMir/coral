@@ -28,7 +28,7 @@ from eth_account import Account
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from coral.chain import Chain, RateIndex, DEPLOY_FILE  # noqa: E402
-from coral.match import pair_lines, measure, key as line_key  # noqa: E402
+from coral.match import pair_lines, pair_keys, measure, key as line_key  # noqa: E402
 from coral.mrf import provider_csv, provider_header, payer_json, Skipped  # noqa: E402
 from coral.typed import Rate  # noqa: E402
 from coral.verify import Line, verify_line  # noqa: E402
@@ -116,20 +116,26 @@ def main():
     pay_unique = [ln for d in pay_by_key.values() for ln in d.values()]
 
     # Part 1: real comparison
+    # one pair per provider line against the nearest comparable payer value of the key ("keys");
+    # every provider line against every distinct payer value ("lines") is reported beside it
     real = {}
     for tin, lines in prov.items():
-        pairs = pair_lines(lines, pay_unique)
+        pairs = pair_keys(lines, pay_unique)
         by_group = {}
         for g, codes in CODES.items():
             ps = [p for p in pairs if p.provider.code in codes]
             by_group[g] = measure(ps).row()
         real[tin] = {"pairs": len(pairs), "provider_keys": len({line_key(l) for l in lines}),
                      "payer_keys_for_provider": len({k for k in pay_by_key if k[2] == tin}),
-                     "all": measure(pairs).row(), "groups": by_group}
+                     "all": measure(pairs).row(), "lines": measure(pair_lines(lines, pay_unique)).row(), "groups": by_group}
         print(f"{meta[tin]['name']}: {len(pairs)} pairs, {real[tin]['all']}")
-    all_pairs = [p for lines in prov.values() for p in pair_lines(lines, pay_unique)]
+    all_pairs = [p for lines in prov.values() for p in pair_keys(lines, pay_unique)]
     real["all_providers"] = measure(all_pairs).row()
-    print(f"all providers: {real['all_providers']}")
+    real["all_providers_lines"] = measure([p for lines in prov.values() for p in pair_lines(lines, pay_unique)]).row()
+    paired_keys = {p.key for p in all_pairs}
+    real["payer_values_per_paired_key"] = round(sum(len(pay_by_key[k]) for k in paired_keys) / max(len(paired_keys), 1), 2)
+    print(f"all providers: {real['all_providers']}; by lines {real['all_providers_lines']}; "
+          f"{real['payer_values_per_paired_key']} payer values per paired key")
 
     # Part 2: synthetic attribution on the ledger
     keys = json.loads(KEYS_FILE.read_text())
@@ -154,15 +160,16 @@ def main():
             agreed.setdefault(p.key, p.provider)
     idx = RateIndex(ch, payer_id=PAYER)
     start = int(time.mktime(time.strptime("2025-11-01", "%Y-%m-%d")))
-    committed = 0
+    committed, already = 0, 0
     for k, ln in agreed.items():
         if idx.any_for(k):
+            already += 1          # an earlier run of this script
             continue
         r = Rate(ln.payerId, ln.planId, ln.providerId, ln.npi, ln.code, ln.modifier_, ln.setting, ln.billingClass,
                  ln.unit, 0, ln.amount_cents, start, 0, f"example agreement, {ln.providerId}", "")
         ch.commit_rate_with_keys(r, keys["entities"][ln.providerId]["signer"]["key"], qkey)
         committed += 1
-    print(f"signed {committed} records for {len(agreed)} paired keys")
+    print(f"signed {committed} records for {len(agreed)} paired keys ({already} already on the ledger)")
     idx = RateIndex(ch, payer_id=PAYER)
     at = start + 86400
 
@@ -190,7 +197,8 @@ def main():
         "payer_file": args.payer_file.name, "plan_crosswalk": PLAN_ID, "codes": CODES,
         "providers": meta, "payer_lines": len(pay), "payer_lines_unique": len(pay_unique),
         "payer_skipped": dict(skipped.counts), "real": real,
-        "synthetic": {"keys": len(agreed), "records_signed": committed, "truth": truth, "result": synthetic},
+        "synthetic": {"keys": len(agreed), "records_signed": committed + already, "signed_this_run": committed,
+                      "truth": truth, "result": synthetic},
     }, indent=2))
     print(f"wrote {args.out}")
 

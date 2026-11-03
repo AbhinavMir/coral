@@ -77,7 +77,7 @@ Four causes are visible in the files themselves. First, the identifying fields d
 
 A rate record has a key and a value. The key is the set of fields that identify one rate: payer id, plan id, provider id (the contracting tax identification number), billing NPI, billing code with its type, modifiers, setting (inpatient or outpatient), billing class (facility or professional), and drug unit of measure. Two records equal on all key fields are the same rate. The value is the formula (fixed, percent of charges, or percent of reference), the amount in cents or basis points, the start and end dates, a contract version label, a reference version (the chargemaster or fee-schedule version a percent rate applies to), and the id of the record this one supersedes, if any.
 
-The setting and billing class fields come from the CMS file. The payer file carries billing class directly and setting through place-of-service codes: 21 is inpatient; 19, 22, 23, and 24 are outpatient. The payer file has no drug unit. A payer line with no place-of-service code has no setting, and the parser reports it as such rather than guessing.
+The setting and billing class fields come from the CMS file. The payer file carries billing class directly (institutional or professional) and, for professional prices, setting through place-of-service codes: 21 is inpatient; 19, 22, 23, and 24 are outpatient. An institutional price carries no place of service. A DRG prices an admission and is inpatient; any other institutional price is taken as applying in both settings, as the CMS file's ``both'' does, and the parser counts how often it did so. A professional price with no place of service has no setting, and the parser reports it rather than guessing. The payer file has no drug unit.
 
 Four other record types support the rate record. An Entity binds an entity id to a root public key. A Delegation authorizes a signing key for an entity over a time window. A Revocation ends a signing key from a time at or after the block that carries it. A Chargemaster Version is the provider's signature over a version label, the SHA-256 of the chargemaster file, and an effective date; a percent-of-charges record names it, so the dollar result recomputes from signed inputs.
 
@@ -91,7 +91,7 @@ Validity is judged at the block timestamp of the commit, which consensus sets, n
 
 \subsection*{The registry}
 
-The registry is one contract on a permissioned Ethereum-compatible network. Each action carries EIP-712 signatures over a typed structure; the domain binds the chain id and contract address, so a signature for one deployment is not valid on another. Both parties sign the same structure hash, and that hash is the record id. Anyone can relay the transaction; the relayer has no authority. Records can be committed one at a time or in a batch that succeeds or fails as a whole.
+The registry is one contract on a permissioned Ethereum-compatible network. Each action carries EIP-712 signatures over a typed structure; the domain binds the chain id and contract address, so a signature for one deployment is not valid on another. Both parties sign the same structure hash, and that hash is the record id. Identifier fields are 32-byte strings; a longer identifier is stored as its hash, and the published file must carry the full text. Anyone can relay the transaction; the relayer has no authority. Records can be committed one at a time or in a batch that succeeds or fails as a whole.
 
 One record is live per key at any time. A new record for a key whose window overlaps a live record is rejected, unless it names that record in its supersedes field; the old record then ends where the new one starts. Both parties sign the new record, so an amendment carries both signatures and the history of a key is a chain of records. A verifier therefore never finds two answers for one date.
 
@@ -121,7 +121,7 @@ All code, the contract, the parsers, and the run output are in the repository \c
 
 The file has \sheetRows{} rows. \sheetNoCode{} rows carry only a chargemaster, revenue, or NDC code and no CPT, HCPCS, or MS-DRG code; a record needs a code both parties use, so these rows are outside the record format. The remaining \sheetLines{} rows name \sheetPayers{} payers. \sheetAlgorithm{} rows give an algorithm and no dollar or percent value. The rest reduce to \sheetRecords{} records: \sheetFixed{} fixed and \sheetPercent{} percent of charges. \sheetCollisions{} rows have a key that already had a record with a different value. These are items with the same billing code, setting, class, and unit but a different list price and a different fixed amount; the key fields that the public formats offer do not separate them, and a record for them needs an item-level identifier.
 
-Table~1 gives the cost. Signing ran at \sheetSigPerS{} signatures per second on one laptop. Commits ran \sheetBatch{} records per transaction with eight transactions in flight, at \sheetRecPerS{} records per second, so the sheet took \sheetCommitMin{} minutes. Each record costs \sheetGas{} gas and \sheetBytes{} bytes of transaction input; the sheet added \sheetDiskMB{} MB to one validator's store. Gas is reported as a measure of execution work; the network charges no fee.
+Table~1 gives the cost. Signing ran at \sheetSigPerS{} signatures per second on one laptop. Commits ran \sheetBatch{} records per transaction with eight transactions in flight, at \sheetRecPerS{} records per second over the run, so the sheet takes \sheetCommitMin{} minutes. The rate fell as the ledger grew: \sheetRecPerSEarly{} records per second over the first 20,000 records of the run, \sheetRecPerS{} over all of it. Each record costs \sheetGas{} gas, \sheetBytes{} bytes of transaction input, and \sheetDiskBytes{} bytes on one validator's disk, so the sheet adds \sheetDiskMB{} MB to each validator. Gas is reported as a measure of execution work; the network charges no fee.
 
 \begin{table}[h]
 \centering
@@ -135,19 +135,19 @@ Rows with only an algorithm & \sheetAlgorithm \\
 Records signed (fixed / percent of charges) & \sheetRecords{} (\sheetFixed{} / \sheetPercent) \\
 Rows whose key collided with a different value & \sheetCollisions \\
 Signing, both sides & \sheetSignS{} s (\sheetSigPerS{} signatures/s) \\
-Commit, \sheetBatch{} records per transaction, \sheetTx{} transactions & \sheetCommitS{} s (\sheetRecPerS{} records/s) \\
+Commit, \sheetBatch{} records per transaction & \sheetRecPerS{} records/s (\sheetCommitMin{} min for the sheet) \\
 Gas per record & \sheetGas \\
 Transaction input per record & \sheetBytes{} bytes (\sheetCalldataMB{} MB total) \\
-Validator storage added & \sheetDiskMB{} MB \\
+Validator storage per record / for the sheet & \sheetDiskBytes{} bytes / \sheetDiskMB{} MB \\
 Registry load into the verifier index & \sheetLoadS{} s \\
 Verification of \sheetVerifyLines{} rows & \sheetVerifyS{} s (\sheetLinesPerS{} rows/s) \\
 Clean copy: match / amount differs / other & \sheetCleanMatch{} / \sheetCleanDiffers{} / \sheetCleanOther \\
-Altered copy: rows altered / caught & \sheetAltered{} / \sheetCaught \\
+Altered copy: rows altered / caught / already differed / not comparable & \sheetAltered{} / \sheetCaught{} / \sheetAlreadyDiffers{} / \sheetNotComparable \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Verification of the clean file returned \sheetCleanMatch{} matches and \sheetCleanDiffers{} amount-differs verdicts. The amount-differs verdicts are the key collisions: the file carries a second value for a key the registry holds once. Of \sheetAltered{} altered rows, \sheetCaught{} were caught; the remainder were collision rows that already differed before alteration. This run is self-consistency: the records were minted from the rows they are checked against, so a match is expected. What it establishes is that the record format covers every row with a standard code and a value, that the key holds for all but \sheetCollisions{} rows, and the cost of signing a full sheet.
+Verification of the clean file returned \sheetCleanMatch{} matches, \sheetCleanDiffers{} amount-differs verdicts, and \sheetCleanNeedsCM{} needs-chargemaster verdicts. The amount-differs verdicts are the key collisions: the file carries a second value for a key the registry holds once. The needs-chargemaster verdicts are collision rows that carry a dollar amount for a key whose record is a percent of charges; the verifier needs the list price to compute the expected amount. In the altered copy, \sheetAltered{} rows had their signed value changed; \sheetCaught{} changed from match to amount differs, \sheetAlreadyDiffers{} were collision rows that differed before the change, and \sheetNotComparable{} were needs-chargemaster rows. No altered row that matched before the change matched after it. This run is self-consistency: the records were minted from the rows they are checked against, so a match is expected. What it establishes is that the record format covers every row with a standard code and a value, that the key holds for all but \sheetCollisions{} rows, and the cost of signing a full sheet.
 
 \subsection*{Discovery}
 
@@ -155,15 +155,16 @@ Of ten health systems tried on 2026-10-27, four served the CMS locator file. Of 
 
 \subsection*{Pair run on real data}
 
-Table~2 gives, per provider, the keys on each side and the agreement on paired keys. The Aetna file lists \pairPayerLines{} prices for the five providers' NPIs on the 16 codes (\pairPayerUnique{} distinct amounts per key). Across providers, \pairAll{} pairs formed; \pairExact\% matched exactly, \pairWithinTen\% fell within 10\%, and \pairOverFifty\% differed by more than 50\%. Table~3 gives the same measure by code group.
+Table~2 gives, per provider, the keys on each side and the agreement on paired keys. The Aetna file lists \pairPayerLines{} prices for the five providers' NPIs on the 16 codes, \pairPayerUnique{} after lines with the same key and value are merged. The crosswalk maps every Aetna commercial plan in the file to one label, so a key has \pairValuesPerKey{} payer values on average; each provider line is paired with the nearest payer value of the same kind, dollars with dollars and percent of charges with percent of charges. Across providers, \pairAll{} provider lines paired. \pairComparable{} carry the same kind of value on both sides; \pairNotComparable{} carry a dollar on one side and a percent of charges on the other and cannot be compared. Of the comparable pairs, \pairExact\% matched exactly, \pairWithinTen\% fell within 10\%, and \pairOverFifty\% differed by more than 50\%. Paired against every payer value of the key instead of the nearest, \pairLineExact\% of \pairLineComparable{} comparable pairs matched exactly. Table~3 gives the nearest-value measure by code group.
 
 \begin{table}[h]
 \centering
-\caption{Five providers against one Aetna file on the 16 Trilliant codes. Keys: distinct record keys on each side. Pairs: provider line and payer line with the same key.}
-\small
-\begin{tabular}{p{4.2cm}lrrrrrrr}
+\caption{Five providers against one Aetna file on the 16 Trilliant codes. Keys: distinct record keys on each side. Pairs: provider lines with a payer value for the same key; comparable: both sides give the same kind of value. Percentages are of comparable pairs.}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llrrrrrrrr}
 \toprule
-Provider & File date & Codes & Provider keys & Payer keys & Pairs & Exact \% & Within 10\% & Over 50\% \\
+Provider & File date & Codes & Provider keys & Payer keys & Pairs & Comparable & Exact \% & Within 10\% & Over 50\% \\
 \midrule
 \pairRows
 \bottomrule
@@ -174,9 +175,9 @@ Provider & File date & Codes & Provider keys & Payer keys & Pairs & Exact \% & W
 \centering
 \caption{Agreement by code group, all five providers.}
 \small
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrrrr}
 \toprule
-Group & Pairs & Exact \% & Within 10\% & Over 50\% \\
+Group & Pairs & Comparable & Exact \% & Within 10\% & Over 50\% \\
 \midrule
 \pairGroupRows
 \bottomrule
@@ -189,13 +190,13 @@ Group & Pairs & Exact \% & Within 10\% & Over 50\% \\
 
 \subsection*{Key rotation}
 
-On the running network, a new signing key was delegated and the old one revoked from a time after the block. A commit with the old key reverted with \texttt{SignerNotAuthorized}; \texttt{authorizedAt} returned true for the old key at the commit time of its earlier records and false after the revocation. A revocation dated before the current block reverted with \texttt{BackdatedRevocation}. A root replacement proposed by the registrar could not be activated before seven days and was cancelled by the current root's veto.
+On the running network, one record was committed with the payer's signing key; then a new signing key was delegated and the old one revoked from a time ten seconds after the current block. After that time, a commit with the old key reverted with \texttt{SignerNotAuthorized} and the same commit with the new key succeeded. \texttt{authorizedAt} returned true for the old key at the commit time of its earlier record and false after the revocation, so the earlier record stays valid. A revocation dated before the current block reverted with \texttt{BackdatedRevocation}. A root replacement proposed by the registrar reverted on activation with \texttt{RootDelayNotPassed}; after the current root's veto, activation reverted with \texttt{NoPendingRoot} and the root was unchanged.
 
 \section*{Discussion}
 
-\textbf{What the run shows.} The record format holds every row of a real provider file that carries a standard code and a value, which is \sheetLines{} of \sheetRows{} rows. The key fields of the public formats identify a rate for all but \sheetCollisions{} rows. The rows they do not identify are items that share a billing code; the provider file knows them by chargemaster code, and the payer file does not know them at all. Any comparison of the two files is undefined for these rows, and the Trilliant measure counts them as disagreement. Signing a full sheet is a batch job of minutes, and verifying a published file is a job of seconds.
+\textbf{What the run shows.} The record format holds every row of a real provider file that carries a standard code and a value, which is \sheetLines{} of \sheetRows{} rows. The key fields of the public formats identify a rate for all but \sheetCollisions{} rows. The rows they do not identify are items that share a billing code; the provider file knows them by chargemaster code, and the payer file does not know them at all. Any comparison of the two files is undefined for these rows, and the Trilliant measure counts them as disagreement. Signing and committing a full sheet is a batch job of \sheetCommitMin{} minutes on one laptop, and verifying a published file is a job of seconds once the index is loaded.
 
-\textbf{What the comparison shows.} On the 16 codes, five providers' files and one Aetna file agree exactly on \pairExact\% of pairs. The pairing itself required a manual crosswalk of plan names, and the payer file has no drug unit and no setting beyond the place-of-service code. These are the same gaps the record format closes: a record carries one plan id, one setting, one unit, and one date, agreed by both parties.
+\textbf{What the comparison shows.} On the 16 codes, five providers' files and one Aetna file agree exactly on \pairExact\% of comparable pairs, and \pairNotComparable{} of \pairAll{} pairs cannot be compared because one file gives a dollar amount and the other a percent of charges. The pairing itself required a manual crosswalk of plan names, under which one key has several payer values, and the payer file has no drug unit and no setting beyond the place-of-service code. These are the same gaps the record format closes: a record carries one plan id, one setting, one unit, and one date, agreed by both parties.
 
 \textbf{Why a replicated ledger.} Kuo and colleagues' conditions apply: providers, payers, and CMS each produce their own record of the same term; the history must be append-only, because a rate that changes mid-year must keep its earlier record; and no party is accepted by the others as the operator of the record. A CMS-run signed log with a hash chain would give the same inclusion guarantee, and the registrar role in CORAL is a single point of trust for identity binding. The delay and veto on root replacement limit that trust to identity binding; the registrar cannot sign a rate, cannot remove a record, and cannot re-key an entity without a week's notice to that entity. Whether the regulator should also operate the log is a policy question; the design works under either answer.
 
@@ -205,7 +206,7 @@ On the running network, a new signing key was delegated and the old one revoked 
 
 \section*{Conclusion}
 
-A negotiated rate is a term that two parties agreed, and the public record of it should carry both signatures. CORAL gives a record format that both public files map to, a registry with a key hierarchy that judges validity at commit time and keeps one live record per key, and a verifier that checks a published line with one lookup. On one real provider file the format covers every row with a standard code and a value, the key holds for all but \sheetCollisions{} rows, and signing the sheet is a job of minutes. On five providers and one payer the files agree exactly on \pairExact\% of pairs on the 16 codes that Trilliant used, and the signed record turns each remaining difference into a finding about one file.
+A negotiated rate is a term that two parties agreed, and the public record of it should carry both signatures. CORAL gives a record format that both public files map to, a registry with a key hierarchy that judges validity at commit time and keeps one live record per key, and a verifier that checks a published line with one lookup. On one real provider file the format covers every row with a standard code and a value, the key holds for all but \sheetCollisions{} rows, and signing the sheet is a batch job of \sheetCommitMin{} minutes on one laptop. On five providers and one payer the files agree exactly on \pairExact\% of comparable pairs on the 16 codes that Trilliant used, and the signed record turns each remaining difference into a finding about one file.
 
 \begin{thebibliography}{99}
 \small

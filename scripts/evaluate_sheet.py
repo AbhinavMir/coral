@@ -55,10 +55,28 @@ def slug(name: str) -> str:
     return "PAYER:" + re.sub(r"[^A-Z0-9]+", "-", name.upper()).strip("-")[:26]
 
 
+def retry(fn, tries: int = 20):
+    """Besu answers a few RPC calls with a null result while importing a block; retry those."""
+    for i in range(tries):
+        try:
+            return fn()
+        except Exception as e:  # BlockNotFound, connection reset
+            if i == tries - 1:
+                raise
+            print(f"  retry {i+1}: {type(e).__name__}", flush=True)
+            time.sleep(3)
+
+
 def besu_bytes() -> int:
     """Bytes on disk of the CMS validator's data directory."""
     out = subprocess.run(["du", "-sk", str(ROOT / "besu" / "data" / "cms")], capture_output=True, text=True).stdout
     return int(out.split()[0]) * 1024 if out else 0
+
+
+def changed(v: int, f: float) -> int:
+    """v scaled by f, and never v itself (a 3-cent drug amount times 0.9 rounds back to 3)."""
+    nv = round(v * f)
+    return nv if nv != v else v + 1
 
 
 def main():
@@ -110,7 +128,7 @@ def main():
     cm_version = ex["chargemaster"]["version"]
     start, end = int(time.mktime(time.strptime(ex["start"], "%Y-%m-%d"))), 0
     on_ledger = {rec.rate.key() for rec in RateIndex(ch, provider_id=args.provider).records}
-    rates, first_value, collisions, algorithm_only, already = [], {}, 0, 0, 0
+    all_rates, first_value, collisions, algorithm_only = [], {}, 0, 0
     for ln in lines:
         # a percent-of-charges row also carries the dollar result; the contract term is the percent
         if ln.percent_bp is not None:
@@ -126,27 +144,28 @@ def main():
                 collisions += 1
             continue
         first_value[k] = (formula, value)
-        if k in on_ledger:
-            already += 1   # the example records seeded earlier
-            continue
-        rates.append(Rate(ln.payerId, ln.planId, ln.providerId, ln.npi, ln.code, ln.modifier_, ln.setting,
+        all_rates.append(Rate(ln.payerId, ln.planId, ln.providerId, ln.npi, ln.code, ln.modifier_, ln.setting,
                           ln.billingClass, ln.unit, formula, value, start, end,
                           f"example agreement, {ln.payerId}", ref))
+    n_fixed = sum(1 for r in all_rates if r.formula == 0)
+    n_pct = len(all_rates) - n_fixed
+    rates = [r for r in all_rates if r.key() not in on_ledger]   # the example records and any earlier partial run
+    already = len(all_rates) - len(rates)
     if args.limit:
         rates = rates[:args.limit]
-    n_fixed = sum(1 for r in rates if r.formula == 0)
-    n_pct = len(rates) - n_fixed
-    print(f"parsed {len(lines)} lines in {parse_s:.1f}s: {len(rates)} records ({n_fixed} fixed, {n_pct} percent), "
-          f"{algorithm_only} algorithm-only lines, {collisions} key collisions, {already} already on the ledger, skipped {dict(skipped.counts)}")
+    print(f"parsed {len(lines)} lines in {parse_s:.1f}s: {len(all_rates)} records ({n_fixed} fixed, {n_pct} percent), "
+          f"{algorithm_only} algorithm-only lines, {collisions} key collisions, {already} already on the ledger, "
+          f"{len(rates)} to commit, skipped {dict(skipped.counts)}")
 
     result = {
         "file": args.csv.name, "provider": args.provider, "npi": npi, "lines": len(lines), "parse_s": parse_s,
-        "records": len(rates), "fixed": n_fixed, "percent": n_pct, "algorithm_only": algorithm_only,
-        "key_collisions": collisions, "already_on_ledger": already, "skipped": dict(skipped.counts), "payers": len(names),
+        "records": len(all_rates), "fixed": n_fixed, "percent": n_pct, "algorithm_only": algorithm_only,
+        "key_collisions": collisions, "already_on_ledger": already, "committed_this_run": len(rates),
+        "skipped": dict(skipped.counts), "payers": len(names),
         "batch": args.batch, "inflight": args.inflight,
     }
 
-    if not args.skip_commit:
+    if not args.skip_commit and rates:
         # sign
         t1 = time.time()
         dom = domain(ch.w3.eth.chain_id, ch.contract.address)
@@ -165,25 +184,31 @@ def main():
             chunk = rates[i:i + args.batch]
             ps = [s[0] for s in sigs[i:i + args.batch]]
             qs = [s[1] for s in sigs[i:i + args.batch]]
-            tx = fn([r.tuple() for r in chunk], ps, qs).transact({"from": ch.relayer})
+            try:
+                tx = retry(lambda: fn([r.tuple() for r in chunk], ps, qs).transact({"from": ch.relayer}))
+            except Exception as e:
+                if "0xbfec5558" in str(e):   # AlreadyCommitted: a retried send had gone through
+                    print("  batch already on the ledger, skipped", flush=True)
+                    continue
+                raise
             pending.append(tx)
             if len(pending) >= args.inflight:
                 for h in pending:
-                    rcpt = ch.w3.eth.wait_for_transaction_receipt(h, timeout=600)
+                    rcpt = retry(lambda: ch.w3.eth.wait_for_transaction_receipt(h, timeout=600))
                     if rcpt.status != 1:
                         raise RuntimeError(f"batch reverted: {h.hex()}")
                     gas.append(rcpt.gasUsed)
-                    calldata += len(ch.w3.eth.get_transaction(h)["input"])
+                    calldata += len(retry(lambda: ch.w3.eth.get_transaction(h))["input"])
                 pending = []
                 done = min(i + args.batch, len(rates))
                 el = time.time() - t2
                 print(f"  {done}/{len(rates)} committed, {done/el:.0f} records/s, block {ch.w3.eth.block_number}", flush=True)
         for h in pending:
-            rcpt = ch.w3.eth.wait_for_transaction_receipt(h, timeout=600)
+            rcpt = retry(lambda: ch.w3.eth.wait_for_transaction_receipt(h, timeout=600))
             if rcpt.status != 1:
                 raise RuntimeError(f"batch reverted: {h.hex()}")
             gas.append(rcpt.gasUsed)
-            calldata += len(ch.w3.eth.get_transaction(h)["input"])
+            calldata += len(retry(lambda: ch.w3.eth.get_transaction(h))["input"])
         commit_s = time.time() - t2
         disk1 = besu_bytes()
         print(f"committed {len(rates)} records in {commit_s:.1f}s: {len(rates)/commit_s:.0f} records/s, "
@@ -215,7 +240,8 @@ def main():
     print(f"verify clean copy: {checked} lines, {clean} in {verify_s:.1f}s ({checked/verify_s:.0f} lines/s)")
 
     random.seed(1)
-    tampered, altered, caught = {}, 0, 0
+    # alter the field the key's record holds: the percent when the record is percent of charges, else the dollar
+    tampered, altered, caught, already, not_comparable, still_match = {}, 0, 0, 0, 0, 0
     for ln in lines:
         if ln.amount_cents is None and ln.percent_bp is None:
             continue
@@ -224,19 +250,36 @@ def main():
         if hit:
             altered += 1
             f = random.choice([0.9, 1.1, 1.5, 0.5])
-            t = replace(ln, amount_cents=round(ln.amount_cents * f)) if ln.amount_cents is not None \
-                else replace(ln, percent_bp=round(ln.percent_bp * f))
+            rec_formula = first_value.get(ln.key(), (0,))[0]
+            if (rec_formula == 1 and ln.percent_bp is not None) or ln.amount_cents is None:
+                t = replace(ln, percent_bp=changed(ln.percent_bp, f))
+            else:
+                t = replace(ln, amount_cents=changed(ln.amount_cents, f))
         v = verify_line(idx, t, at)
         tampered[v.status] = tampered.get(v.status, 0) + 1
-        if hit and v.status == "amount_differs":
-            caught += 1
-    print(f"verify tampered copy: {altered} altered, {caught} caught, {tampered}")
+        if hit:
+            before = verify_line(idx, ln, at).status
+            if before == "match" and v.status == "amount_differs":
+                caught += 1
+            elif before == "amount_differs":
+                already += 1          # a collision row: the ledger held another value before the change
+            elif before != "match":
+                not_comparable += 1   # no comparable record (needs_chargemaster)
+            else:
+                still_match += 1      # must be zero: the altered field is the one the record holds
+    print(f"verify tampered copy: {altered} altered, {caught} caught, {already} already differed, "
+          f"{not_comparable} not comparable, {still_match} still match, {tampered}")
 
     result.update({
         "index_load_s": load_s, "verify_lines": checked, "verify_s": verify_s, "lines_per_s": checked / verify_s,
         "clean": clean, "tampered": tampered, "altered": altered, "caught": caught,
+        "altered_already_differs": already, "altered_not_comparable": not_comparable, "altered_still_match": still_match,
     })
     args.out.parent.mkdir(exist_ok=True)
+    if args.skip_commit and args.out.exists():
+        prev = json.loads(args.out.read_text())
+        prev.update({k: v for k, v in result.items() if k not in ("already_on_ledger", "committed_this_run")})
+        result = prev
     args.out.write_text(json.dumps(result, indent=2))
     print(f"wrote {args.out}")
 
