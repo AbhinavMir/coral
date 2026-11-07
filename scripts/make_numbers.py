@@ -59,8 +59,9 @@ def main():
         cmd("pairExact", a["exact_pct"]), cmd("pairWithinTen", a["within_10_pct"]), cmd("pairOverFifty", a["over_50_pct"]),
         cmd("pairLineComparable", n(al["comparable"])), cmd("pairLineExact", al["exact_pct"]),
     ]
-    short = {"TIN:84-0398876": "UCHealth Yampa Valley", "TIN:46-0796114": "UCHealth Memorial Central",
-             "TIN:36-2169147": "Advocate Christ", "TIN:93-1176109": "OHSU", "TIN:94-0562680": "Alta Bates Summit"}
+    # the body letters the providers and does not name them; notes.tex keeps the mapping
+    short = {"TIN:84-0398876": "A (Colorado)", "TIN:46-0796114": "B (Colorado)",
+             "TIN:36-2169147": "C (Illinois)", "TIN:93-1176109": "D (Oregon)", "TIN:94-0562680": "E (California)"}
     rows = []
     for tin, m in p["providers"].items():
         m = dict(m, name=short.get(tin, m["name"]))
