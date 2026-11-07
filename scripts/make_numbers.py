@@ -47,13 +47,13 @@ def main():
     prog = [ln.split() for ln in (R / "evaluate_sheet.log").read_text().splitlines() if "committed," in ln]
     early = [ln for ln in prog if ln[0].startswith("20000/")]
     out.append(cmd("sheetRecPerSEarly", early[0][2]))
-    # the log prints the cumulative average; the windowed rate over each 8-line span comes from the implied elapsed time
+    # the log prints the cumulative average; the windowed rate over each 25-line span comes from the implied elapsed time
     pts = [(int(ln[0].split("/")[0]), float(ln[2])) for ln in prog]
     dat = ["ledger rate window\n"]
     for i, (cnt, avg) in enumerate(pts):
         win = "nan"
-        if i >= 8:
-            c0, a0 = pts[i - 8]
+        if i >= 25:   # 20,000-record windows; the log rounds the cumulative rate, so short windows show artifacts
+            c0, a0 = pts[i - 25]
             win = f"{(cnt - c0) / (cnt / avg - c0 / a0):.0f}"
         dat.append(f"{s['already_on_ledger'] + cnt} {avg:.0f} {win}\n")
     (R / "commit_rate.dat").write_text("".join(dat))

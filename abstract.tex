@@ -209,7 +209,7 @@ The registry is one contract on a permissioned Ethereum-compatible network (Figu
 
 One record is live per key at any time. A new record for a key whose window overlaps a live record is rejected, unless it names that record in its supersedes field; the old record then ends where the new one starts. At any block height a verifier finds one answer for one date; a superseding record may start in the past, so a verdict is reported as of a block height and can change when a later record supersedes.
 
-The prototype network is Hyperledger Besu 26.10.2 with IBFT 2.0 consensus \cite{besu}, a two-second block period, and four validators, which stand for CMS, a provider association, a payer association, and an auditor. Validators order transactions; they cannot sign a rate. In every run all four validators ran in containers on one laptop with a 10-core ARM processor and 64 GB of memory, under Besu's enterprise profile, which keeps full state history; the throughput figures therefore carry no network latency and include archive storage. Two defects found in review after the runs are fixed and tested: a signed revocation for a later time could be replayed to reopen a key, so a revocation now only moves earlier; and a record whose window had ended could be superseded and so extended, now rejected. A root can no longer be delegated as a signer, and a veto is bound to one proposal. No fix adds storage, and every run below ran on the fixed contract from a fresh ledger. Read access in the prototype is open to any node; a deployment sets it as policy.
+The prototype network is Hyperledger Besu 26.10.2 with IBFT 2.0 consensus \cite{besu}, a two-second block period, and four validators, which stand for CMS, a provider association, a payer association, and an auditor. Validators order transactions; they cannot sign a rate. In every run all four validators ran in containers on one laptop with a 10-core ARM processor and 64 GB of memory, under Besu's enterprise profile, which keeps full state history; the throughput figures therefore carry no network latency and include archive storage. Two defects found in review after the runs are fixed and tested: a signed revocation for a later time could be replayed to reopen a key, so a revocation now only moves earlier; and a record whose window had ended could be superseded and so extended, now rejected. A root can no longer be delegated as a signer, and a veto is bound to one proposal. No fix adds storage, and every run below ran on the fixed contract, on one ledger reset before the sheet run. Read access in the prototype is open to any node; a deployment sets it as policy.
 
 \begin{figure}[!htb]
 \centering
@@ -302,7 +302,7 @@ Table~1 gives the cost. The run committed \sheetCommitRun{} records to a ledger 
 \begin{tabular}{lr}
 \toprule
 Records signed (fixed / percent of charges) & \sheetRecords{} (\sheetFixed{} / \sheetPercent) \\
-Signing, both sides, final run & \sheetSignS{} s (\sheetSigPerS{} signatures/s) \\
+Signing, both sides & \sheetSignS{} s (\sheetSigPerS{} signatures/s) \\
 Commit, \sheetBatch{} records per transaction & \sheetRecPerS{} records/s (\sheetCommitMin{} min for the sheet) \\
 Transaction input per record & \sheetBytes{} bytes (\sheetCalldataMB{} MB in the run) \\
 Validator storage per record / for the sheet & \sheetDiskBytes{} bytes / \sheetDiskMB{} MB \\
@@ -326,8 +326,8 @@ Altered copy: rows altered / caught / already differed / not comparable & \sheet
 \draw (0,0) rectangle (88.00,6);
 \node[lbl] at (11.50,3) {no standard code\\\sheetNoCode};
 \node[lbl] at (30.23,3) {algorithm only\\\sheetAlgorithm};
-\node[lbl] at (43.49,3) {repeat rows\\\sheetRepeats};
-\node[lbl, above=0mm] at (50.52,6) {collisions \sheetCollisions};
+\node[lbl, above=0mm, xshift=-6mm] at (43.49,6) {repeat rows \sheetRepeats};
+\node[lbl, above=0mm, xshift=5mm] at (50.52,6) {collisions \sheetCollisions};
 \node[lbl] at (65.51,3) {fixed records\\\sheetFixed};
 \node[lbl] at (83.75,3) {percent\\\sheetPercent};
 \node[lbl, below=0.5mm] at (44.00,0) {\sheetRows{} rows in the file; \sheetRecords{} records signed};
@@ -337,22 +337,21 @@ Altered copy: rows altered / caught / already differed / not comparable & \sheet
 \begin{minipage}[t]{0.42\textwidth}
 \centering
 \begin{tikzpicture}
-\begin{axis}[width=\textwidth, height=28mm, font=\scriptsize, xlabel={records on the ledger}, ylabel={records/s},
-  xmin=0, xmax=265000, ymin=0, ymax=200, scaled x ticks=false, xticklabel style={/pgf/number format/fixed, /pgf/number format/1000 sep={,}},
-  xtick={0,50000,100000,150000,200000,250000}, ytick={0,50,100,150,200}, grid=major, grid style={black!10}, title style={font=\scriptsize\bfseries, at={(0,1)}, anchor=south west}, title={(b) Commit rate as the ledger grows}]
+\begin{axis}[width=\textwidth, height=28mm, font=\scriptsize, xlabel={thousand records on the ledger}, ylabel={records/s},
+  xmin=0, xmax=265, ymin=0, ymax=200, x filter/.code={\pgfmathparse{#1/1000}}, xtick={0,50,100,150,200,250}, ytick={0,50,100,150,200}, grid=major, grid style={black!10}, title style={font=\scriptsize\bfseries, at={(0,1)}, anchor=south west}, title={(b) Commit rate as the ledger grows}]
 \addplot[thick, blue!70!black, no marks, unbounded coords=discard] table[x=ledger, y=window] {results/commit_rate.dat};
 \addplot[thin, black!50, dashed, no marks] table[x=ledger, y=rate] {results/commit_rate.dat};
 \end{axis}
 \end{tikzpicture}
 \end{minipage}
-\caption{Full-sheet run. (a) Of \sheetRows{} rows, those with a standard code and a value reduce to \sheetRecords{} signed records; repeat rows carry the key and value of an earlier row, collisions carry a different value for a key already signed. (b) Commit rate over windows of 6,400 records (solid) and cumulative (dashed); the rate fell from \sheetRecPerSEarly{} records per second over the first 20,000 records to \sheetRecPerSLate{} over the last 50,000.}
+\caption{Full-sheet run. (a) Of \sheetRows{} rows, those with a standard code and a value reduce to \sheetRecords{} signed records; repeat rows carry the key and value of an earlier row, collisions carry a different value for a key already signed. (b) Commit rate over windows of 20,000 records (solid) and cumulative (dashed); the rate fell from \sheetRecPerSEarly{} records per second over the first 20,000 records to \sheetRecPerSLate{} over the last 50,000.}
 \end{figure}
 
 Verification of the clean file returned \sheetCleanMatch{} matches, \sheetCleanDiffers{} amount-differs verdicts, and \sheetCleanNeedsCM{} needs-chargemaster verdicts; both kinds are the key collisions. In the altered copy, \sheetAltered{} rows had their signed value changed; \sheetCaught{} changed from match to amount differs, \sheetAlreadyDiffers{} were collision rows that differed before the change, and \sheetNotComparable{} were needs-chargemaster rows; no altered row that matched before the change matched after it, as the construction guarantees. This run is self-consistency: the records were minted from the rows they are checked against. It establishes that the record format covers every row with a standard code and a value, that the key holds for all but \sheetCollisions{} rows, and the cost of signing a full sheet.
 
 \subsection*{Discovery}
 
-Of ten health systems tried on 2026-10-27, four served the CMS locator file; of ten tried on 2026-11-03, four served a tall CSV, four JSON, one a wide CSV, and one an empty archive, and our parser reads the tall CSV only. One national payer publishes files of 9 GB and more per plan, which we did not download; payer P publishes 5,697 in-network files by plan cluster of about 1.7 GB each, with no state in the name. The pair run therefore covers one payer.
+Of ten health systems tried on 2026-10-27, four served the CMS locator file; of ten tried on 2026-11-03, four served a tall CSV, four JSON, one a wide CSV, and one an empty archive, and our parser reads the tall CSV only. One national payer publishes files of 9 GB and more per plan, which we did not download; payer P publishes 5,697 in-network files by plan cluster of about 1.7 GB each, with no state in the name.
 
 \subsection*{Pair run on real data}
 
