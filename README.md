@@ -4,8 +4,12 @@ A permissioned ledger on which a provider and a payer jointly sign each
 negotiated rate. Published price files cite the record id, so a line that
 departs from the signed rate is detected by anyone with the file.
 
-Paper and all working notes: `abstract.tex` (AMIA format; body in `abstract.tex`,
+Paper and all working notes: `abstract.tex` (AMIA format, 10 pages; body in `abstract.tex`,
 notes in `notes.tex`, run numbers in `numbers.tex` written by `scripts/make_numbers.py`).
+Submission version: `medinfo/coral-medinfo.tex`, the same paper cut to 5 pages in the
+IOS Press book-article format for MedInfo 2027 (submission opens 2026-11-10, deadline
+2026-12-04; the 2027 format rules were not posted when this was built, so the 5-page
+limit and template follow MedInfo 2023 and 2025).
 
 ## State (2026-11-07)
 
@@ -46,6 +50,7 @@ Evaluation:
 .venv/bin/python scripts/pairs_sensitivity.py       # crosswalk, repeat-line, and cent-precision sensitivities
 .venv/bin/python scripts/make_numbers.py && pdflatex abstract.tex && pdflatex abstract.tex
 pdflatex -jobname=abstract-submission '\def\submission{}\input{abstract.tex}'   # twice; body and references only, no notes
+(cd medinfo && pdflatex coral-medinfo.tex && pdflatex coral-medinfo.tex)   # 5-page IOS Press version; reads ../numbers.tex
 ./scripts/rerun_all.sh      # fresh ledger, then every network run above in order (about 90 minutes)
 ```
 

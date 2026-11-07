@@ -147,6 +147,15 @@ def main():
                     f"{xl['pairs']} & {xl['comparable']} & {pct(xl, 'exact_pct')} & {pct(xl, 'within_10_pct')} & "
                     f"{pct(xl, 'over_50_pct')} \\\\")
     out.append("\\newcommand{\\pairRows}{" + "\n".join(rows) + "}\n")
+    # narrow form for the 12.4 cm type area of the IOS Press format: no file date or code count
+    srows = []
+    for tin, m in p["providers"].items():
+        x = r[tin]
+        xl = x["lines"]
+        srows.append(f"{short.get(tin, m['name'])} & {x['provider_keys']} & {x['payer_keys_for_provider']} & "
+                     f"{xl['pairs']} & {xl['comparable']} & {pct(xl, 'exact_pct')} & {pct(xl, 'within_10_pct')} & "
+                     f"{pct(xl, 'over_50_pct')} \\\\")
+    out.append("\\newcommand{\\pairRowsShort}{" + "\n".join(srows) + "}\n")
     # per-provider counts for the bar chart: exact, within 10% but not exact, beyond 10%, not comparable
     bars = ["provider exact within beyond notcomp\n"]
     for tin, m in p["providers"].items():
