@@ -7,7 +7,7 @@ departs from the signed rate is detected by anyone with the file.
 Paper and all working notes: `abstract.tex` (AMIA format; body in `abstract.tex`,
 notes in `notes.tex`, run numbers in `numbers.tex` written by `scripts/make_numbers.py`).
 
-## State (2026-11-03)
+## State (2026-11-06)
 
 | Part | State |
 |---|---|
@@ -20,7 +20,7 @@ notes in `notes.tex`, run numbers in `numbers.tex` written by `scripts/make_numb
 | Full-sheet run (one provider, 20 payers) | done; `results/evaluate_sheet.json`: 262,535 records, 61 records/s, verify 363,690 lines in 1.3 s |
 | Five providers vs Aetna on 16 codes, synthetic attribution | done; `results/evaluate_pairs.json`: 52 pairs, 33 comparable, 45.5% exact |
 | Key lifecycle on the network | done; `results/key_events.json` |
-| Paper | complete; body 8 pages, 23 references, notes appended; numbers from `numbers.tex` |
+| Paper | revised after a five-reviewer round on 2026-11-06; body with references 10 pages, 8 figures, 3 tables, 34 references, notes appended; numbers from `numbers.tex` |
 
 ## Run
 
@@ -41,6 +41,7 @@ Evaluation:
 .venv/bin/python scripts/evaluate_sheet.py data/raw/<provider>_standardcharges.csv --provider TIN:84-0398876 --batch 100 --inflight 8
 .venv/bin/python scripts/evaluate_pairs.py data/raw/tic/<aetna in-network>.json.gz
 .venv/bin/python scripts/key_events.py           # rotates the Aetna signing key in build/keys.json
+.venv/bin/python scripts/sheet_stats.py data/raw/<provider>_standardcharges.csv TIN:84-0398876   # keys with several values, repeat rows
 .venv/bin/python scripts/make_numbers.py && pdflatex abstract.tex && pdflatex abstract.tex
 ```
 
@@ -58,6 +59,7 @@ coral/match.py               pair provider and payer lines, agreement statistics
 app/                         FastAPI server and static pages
 besu/                        genesis, validator keys, docker-compose
 scripts/bootstrap.py         deploy and register demo entities
+scripts/sheet_stats.py       row distribution of the full-sheet file -> results/sheet_stats.json
 scripts/seed_examples.py     sign the ten example rates and the chargemaster hash
 scripts/evaluate_sheet.py    sign a whole provider sheet; cost; verify clean and altered copies (--skip-commit: verify only)
 scripts/evaluate_pairs.py    five providers vs one payer file on the 16 Trilliant codes; synthetic attribution

@@ -42,9 +42,32 @@ def main():
     # the body says no altered row that matched before the change matched after it
     assert s["altered_still_match"] == 0, s["altered_still_match"]
     assert s["caught"] + s["altered_already_differs"] + s["altered_not_comparable"] == s["altered"]
-    # commit rate over the first 20,000 records of the run, from the progress log
-    early = [ln for ln in (R / "evaluate_sheet.log").read_text().splitlines() if ln.strip().startswith("20800/")]
-    out.append(cmd("sheetRecPerSEarly", early[0].split("committed, ")[1].split(" records/s")[0]))
+    # commit rate over the first 20,000 records of the run, from the progress log; the whole series goes to
+    # results/commit_rate.dat (x = records on the ledger, y = records per second so far in the run)
+    prog = [ln.split() for ln in (R / "evaluate_sheet.log").read_text().splitlines() if "committed," in ln]
+    early = [ln for ln in prog if ln[0].startswith("20000/")]
+    out.append(cmd("sheetRecPerSEarly", early[0][2]))
+    dat = ["ledger rate\n"] + [f"{s['already_on_ledger'] + int(ln[0].split('/')[0])} {ln[2]}\n" for ln in prog]
+    (R / "commit_rate.dat").write_text("".join(dat))
+    out += [
+        cmd("sheetAlready", n(s["already_on_ledger"])),
+        cmd("sheetDiskBeforeGB", f"{s['validator_disk_bytes_before']/1e9:.2f}"),
+        cmd("sheetRepeats", n(s["verify_lines"] - s["records"] - s["key_collisions"])),
+    ]
+    st = json.loads((R / "sheet_stats.json").read_text())
+    assert st["rows_with_value"] == s["verify_lines"] and st["keys"] == s["records"]
+    out += [
+        cmd("sheetPctRows", n(st["percent_rows"])), cmd("sheetPctShare", f"{100*st['percent_rows']/st['rows_with_value']:.1f}"),
+        cmd("sheetKeysMulti", n(st["keys_with_several_values"])), cmd("sheetRowsMulti", n(st["rows_on_those_keys"])),
+    ]
+    # projection to about 6,000 hospitals, each with a sheet of this size; the payer side is not counted
+    H = 6000
+    per_rec_disk = (s['validator_disk_bytes_after'] - s['validator_disk_bytes_before']) / s['committed_this_run']
+    out += [
+        cmd("projHospitals", n(H)), cmd("projRecordsB", f"{H*s['records']/1e9:.1f}"),
+        cmd("projDiskTB", f"{H*s['records']*per_rec_disk/1e12:.0f}"),
+        cmd("projCommitDays", n(round(H*s['records']/s['records_per_s']/86400))),
+    ]
     p = json.loads((R / "evaluate_pairs.json").read_text())
     r = p["real"]
     a, al = r["all_providers"], r["all_providers_lines"]
@@ -58,6 +81,9 @@ def main():
         cmd("pairAll", n(a["pairs"])), cmd("pairComparable", n(a["comparable"])), cmd("pairNotComparable", n(a["not_comparable"])),
         cmd("pairExact", a["exact_pct"]), cmd("pairWithinTen", a["within_10_pct"]), cmd("pairOverFifty", a["over_50_pct"]),
         cmd("pairLineComparable", n(al["comparable"])), cmd("pairLineExact", al["exact_pct"]),
+        cmd("pairLineAll", n(al["pairs"])), cmd("pairLineWithinTen", al["within_10_pct"]), cmd("pairLineOverFifty", al["over_50_pct"]),
+        cmd("pairExactCount", round(a["exact_pct"] * a["comparable"] / 100)),
+        cmd("pairLineExactCount", round(al["exact_pct"] * al["comparable"] / 100)),
     ]
     # the body letters the providers and does not name them; notes.tex keeps the mapping
     short = {"TIN:84-0398876": "A (Colorado)", "TIN:46-0796114": "B (Colorado)",
@@ -70,6 +96,13 @@ def main():
                     f"{x['pairs']} & {x['all']['comparable']} & {pct(x['all'], 'exact_pct')} & {pct(x['all'], 'within_10_pct')} & "
                     f"{pct(x['all'], 'over_50_pct')} \\\\")
     out.append("\\newcommand{\\pairRows}{" + "\n".join(rows) + "}\n")
+    # per-provider counts for the bar chart: exact, within 10% but not exact, beyond 10%, not comparable
+    bars = ["provider exact within beyond notcomp\n"]
+    for tin, m in p["providers"].items():
+        x, k = r[tin]["all"], r[tin]["all"]["comparable"]
+        ex, wi = round(x["exact_pct"] * k / 100), round(x["within_10_pct"] * k / 100)
+        bars.append(f"{short[tin].split()[0]} {ex} {wi - ex} {k - wi} {x['not_comparable']}\n")
+    (R / "pairs_bars.dat").write_text("".join(bars))
     grows = []
     for g, label in (("inpatient", "Inpatient (8 MS-DRG)"), ("gi", "GI (5 CPT)"), ("ortho", "Orthopedic (3 CPT)")):
         agg = {"pairs": 0, "comparable": 0, "exact": 0, "within": 0, "over": 0}
@@ -94,7 +127,11 @@ def main():
         cmd("synBothMatch", n(a.get("both_match_record", 0))), cmd("synPayerDeparts", n(a.get("payer_file_departs", 0))),
         cmd("synProviderDeparts", n(a.get("provider_file_departs", 0))),
         cmd("synNeither", n(sum(v for k, v in a.items() if k not in ("both_match_record", "payer_file_departs", "provider_file_departs")))),
+        cmd("synProvAlteredAll", n(t["provider_altered"] + t["both_altered"])),
+        cmd("synPayAlteredAll", n(t["payer_altered"] + t["both_altered"])),
+        cmd("synUnaltered", n(sy["keys"] - t["provider_altered"] - t["payer_altered"] - t["both_altered"])),
     ]
+    assert a.get("both_match_record", 0) == sy["keys"] - t["provider_altered"] - t["payer_altered"] - t["both_altered"]
     (ROOT / "numbers.tex").write_text("".join(out))
     print("".join(out))
 

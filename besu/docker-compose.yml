@@ -2,7 +2,7 @@
 # Keys and genesis come from `operator generate-blockchain-config` (see README).
 # Node roles in the paper: CMS (registrar), provider association, payer association, auditor.
 x-besu: &besu
-  image: hyperledger/besu:latest
+  image: hyperledger/besu:26.10.2
   restart: unless-stopped
   environment:
     BESU_GENESIS_FILE: /config/genesis.json

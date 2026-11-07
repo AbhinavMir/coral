@@ -12,6 +12,10 @@
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{caption}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,calc,fit,backgrounds,matrix}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 \captionsetup{font=small,labelfont=bf}
 
 \titleformat{\section}{\normalsize\bfseries}{}{0em}{}
@@ -20,7 +24,25 @@
 \titlespacing*{\subsection}{0pt}{0.6em}{0.1em}
 
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{0.5em}
+\setlength{\parskip}{0.4em}
+\setlength{\textfloatsep}{6pt}
+\setlength{\intextsep}{6pt}
+\setlength{\abovecaptionskip}{4pt}
+\setlength{\belowcaptionskip}{0pt}
+
+% figure styles
+\tikzset{
+  box/.style={draw,rounded corners=2pt,align=center,font=\scriptsize,inner sep=3pt,minimum height=1.6em},
+  party/.style={box,fill=black!8},
+  file/.style={box,fill=blue!6},
+  rec/.style={box,fill=orange!12},
+  ledger/.style={box,fill=green!10},
+  verdict/.style={box,fill=red!6},
+  dec/.style={box,fill=yellow!20},
+  lbl/.style={font=\scriptsize,align=center},
+  arr/.style={-{Stealth[length=5pt]},thick},
+  darr/.style={-{Stealth[length=5pt]},thick,dashed},
+}
 
 \input{numbers}
 
@@ -33,133 +55,314 @@
 \end{center}
 
 \section*{Abstract}
-\textit{US health care providers and health insurers each publish the prices they negotiated with each other, in separate files. In 2026 a study of 450 hospitals and two national insurers found that both sides published the same price for only about 10\% of the services compared. We present CORAL, a shared ledger on which the provider and the insurer both sign each negotiated price. The signed record holds the price, the insurance plan, the billing code, whether the service is inpatient or outpatient, and the dates the price applies. Each published file is then checked against the signed records; a price that differs from its record marks that file as wrong. We signed one provider's complete price list and checked its published file against the ledger. We compared five providers' files with one national insurer's file. A simulated run traces a changed price in either file to that file.}
+\textit{Under two US rules, hospitals and health insurers each publish the prices they negotiated, in separate files. In 2026 a study of 450 hospitals and two national insurers found that both sides published the same price for only about 10\% of services compared. We present CORAL, a shared ledger on which the provider and the insurer both sign each negotiated price. The signed record holds the price, the insurance plan, the billing code, whether the service is inpatient or outpatient, and its dates. Each published file is checked against the signed records; a price that differs from its record marks that file as wrong. We signed one record for each rate in one provider's file and checked that file against the ledger. We compared five providers' files with one national insurer's file. A synthetic run traces a changed price in a copy of either file to that copy.}
 
 \section*{Introduction}
 
-Since 2021, each hospital in the United States must publish a machine-readable file of its standard charges, including the rate it negotiated with each payer and plan, under the Hospital Price Transparency rule (45 CFR Part 180) \cite{hpt}. Since 2022, each group health plan and issuer must publish in-network negotiated rates for every provider under the Transparency in Coverage rule \cite{tic}. The two programs publish the same contract terms from two sides. Each file is produced by one party under its own rule, and no clause of either rule asks the other party to review or confirm it \cite{hpt,tic}. The only attestation is the hospital's affirmation of its own file, added in CY2024 \cite{opps2024}.
+Since 2021, each hospital in the United States must publish a machine-readable file of its standard charges, including the rate it negotiated with each payer and plan, under the Hospital Price Transparency rule (45 CFR Part 180) \cite{hpt}. Since 2022, each group health plan and issuer must publish in-network negotiated rates for every provider under the Transparency in Coverage rule \cite{tic}. The two programs publish the same contract terms from two sides (Figure~1a). Each file is produced by one party under its own rule, and no clause of either rule asks the other party to review or confirm it \cite{hpt,tic}. The hospital attests to its own file, under a statement added for CY2024 and extended for CY2026 \cite{opps2024,opps2026}; the payer's yearly attestation concerns gag clauses in its contracts, not its file \cite{gag}.
 
-The two sides do not agree. A 2026 industry study compared the files of 450 hospitals with the files of two national payers on 16 common codes and found that 9.0\% of inpatient pairs, 10.8\% of gastroenterology pairs, and 11.7\% of orthopedic pairs matched exactly; about half fell within 10\%; and 17.9\% of inpatient and gastroenterology pairs differed by more than 50\% \cite{trilliant}. The comparison cannot say which file is correct, because neither file links a line to a contract version, an effective date, or the other party.
+The two sides do not agree. A 2026 industry report compared the files of 450 hospitals with the files of two national payers on 16 common codes and found that 9.0\% of inpatient pairs, 10.8\% of gastroenterology pairs, and 11.7\% of orthopedic pairs matched exactly; about half fell within 10\%; and 17.9\% of inpatient and gastroenterology pairs differed by more than 50\% \cite{trilliant}. The comparison cannot say which file is correct, because neither file links a line to a contract version or to the other party.
 
-A negotiated rate is a contract term that two parties agreed. We take the position that the published record of that term must carry both parties' signatures. CORAL (Committed Ratesheet on Ledger) is a registry on which a provider and a payer jointly sign each negotiated rate before either publishes it. The record carries the fields that identify one rate and the fields that give its value, dates, and contract version. The published files cite the record. A verifier with a file and read access to the registry checks each line with one lookup, and a line that departs from the signed record is attributed to the file that departs.
+A negotiated rate is a contract term that two parties agreed. CORAL (Committed Ratesheet on Ledger) is a registry on which a provider and a payer jointly sign each negotiated rate before either publishes it (Figure~1b), so that a published line can be checked against a record neither party wrote alone. The files cite the record; a verifier with a file and read access to the registry checks each line with one lookup, and a line that departs from the record is attributed to the file that departs.
 
-This paper makes four contributions. First, a record format for a negotiated rate that both public file formats can be mapped to, with a key that we test against a full real rate sheet. Second, a registry contract with a key hierarchy under which validity is judged at commit time, revocations cannot be backdated, root replacement is delayed and can be vetoed, and one record is live per key at any time. Third, a full-sheet run on one provider's public file: all \sheetRecords{} rates signed and committed, every published line verified, with throughput, bytes, and storage measured. Fourth, a comparison of five providers' files with one national payer's file on the 16 codes of the 2026 study, with the data discovery rate reported as a finding, and a synthetic attribution run.
+The paper gives the record format, with a key that both public formats map to, and the registry contract, whose key hierarchy judges validity at commit time, rejects backdated revocations, delays root replacement under a veto, and keeps one live record per key. We sign and commit all \sheetRecords{} rates of one provider's public file, verify every published line with a standard code and a value, and measure throughput, bytes, and storage. A second run compares five providers' files with one national payer's file on the 16 codes of the 2026 report and traces synthetic alterations of two copies of the signed values to the copy that carries them. Both signatures in every run come from prototype keys, so the runs show cost and coverage, not that any file is correct.
+
+\begin{figure}[!htb]
+\centering
+\begin{tikzpicture}[node distance=3mm and 4mm]
+% (a) today
+\node[party] (pa) {Provider};
+\node[party, below=7mm of pa] (qa) {Payer};
+\node[file, right=4mm of pa] (fa) {Provider file\\45 CFR 180, yearly};
+\node[file, right=4mm of qa] (ga) {Payer file\\TiC rule, monthly};
+\node[verdict, right=4mm of $(fa.east)!0.5!(ga.east)$, text width=25mm] (ca) {Comparison: same code, same payer; which line is right? \textit{undefined}};
+\draw[arr] (pa) -- (fa); \draw[arr] (qa) -- (ga);
+\draw[darr] (fa.east) -- (ca.west |- fa.east) -- (ca.north west);
+\draw[darr] (ga.east) -- (ca.west |- ga.east) -- (ca.south west);
+\node[lbl, anchor=south west] at ([yshift=2mm]pa.north west) {\textbf{(a) Today: two one-party files}};
+% (b) coral
+\begin{scope}[xshift=70mm]
+\node[party] (pb) {Provider};
+\node[party, below=7mm of pb] (qb) {Payer};
+\node[rec, right=4mm of $(pb.east)!0.5!(qb.east)$, text width=40mm] (rb) {Rate record. Key: payer, plan, TIN, NPI, code, modifier, setting, class, unit. Value: formula, amount, dates, version. \textbf{Signature 1 + signature 2}};
+\node[ledger, right=4mm of rb] (lb) {Registry\\one live\\record\\per key};
+\node[file, below=4mm of rb.south, anchor=north east, xshift=-1mm] (fb) {Provider file\\line + record id};
+\node[file, below=4mm of rb.south, anchor=north west, xshift=1mm] (gb) {Payer file\\line + record id};
+\node[verdict, below=3mm of $(fb.south)!0.5!(gb.south)$, text width=38mm] (vb) {Verifier: each line against its record; match / differs / no record / expired};
+\draw[arr] (pb.east) -- (rb.west |- pb.east) -- (rb.north west);
+\draw[arr] (qb.east) -- (rb.west |- qb.east) -- (rb.south west);
+\draw[arr] (rb) -- (lb);
+\draw[darr] (rb.south) -- (fb.north east); \draw[darr] (rb.south) -- (gb.north west);
+\draw[arr] (fb.south) -- (fb.south |- vb.north);
+\draw[arr] (gb.south) -- (gb.south |- vb.north);
+\draw[arr] (lb.south) |- (vb.east);
+\node[lbl, anchor=south west] at ([yshift=2mm]pb.north west) {\textbf{(b) CORAL: one record, two signatures}};
+\end{scope}
+\end{tikzpicture}
+\caption{Today each party publishes its own file, and a comparison of the two has no reference to decide which line is right. With CORAL the two parties sign one record per rate; each file cites the record, and a verifier checks each published line against it.}
+\end{figure}
 
 \section*{Background}
 
 \subsection*{The two files}
 
-The provider file, in the CMS tall CSV format, has one row per item and payer plan. The columns that identify a rate are the billing code and its type (CPT, HCPCS, MS-DRG), modifiers, setting (inpatient, outpatient, or both), billing class (facility or professional), drug unit of measure and type, payer name, and plan name. The columns that give its value are the gross charge, the negotiated dollar amount, the negotiated percentage, the negotiated algorithm, and the methodology (fee schedule, case rate, per diem, percent of total billed charges, or other) \cite{hptschema}. The payer file, in the Transparency in Coverage JSON schema, has one item per billing code, with negotiated rates for groups of providers identified by NPI and tax identification number, each with a negotiated type, a billing class, a list of place-of-service codes, and modifiers \cite{ticschema}.
+The provider file, in the CMS tall CSV format, has one row per item and payer plan; the columns that identify a rate and the columns that give its value are the left column of Figure~2 \cite{hptschema}. It must be refreshed at least once a year. The payer file, in the Transparency in Coverage JSON schema, has one item per billing code, with negotiated rates for groups of providers identified by NPI and tax identification number, each with a negotiated type, a billing class, place-of-service codes, modifiers, and an expiration date \cite{ticschema}. It must be refreshed every month.
 
 \subsection*{What a negotiated rate is}
 
-Two terms matter. The chargemaster is the provider's list price for every item. The provider sets it alone; it is not negotiated. The CMS file calls it the gross charge. The negotiated rate is the price the provider and the payer agreed for one code under one plan. It is contractual. The CMS file calls it the payer-specific negotiated charge. A negotiated rate takes one of three forms: a fixed amount, a percent of the chargemaster price, or a percent of a reference fee schedule. In the provider file we profile, 36\% of rows are percent-of-charges rates. Such a rate changes value when the chargemaster changes, and the payer never signs the chargemaster.
+The chargemaster is the provider's list price for every item, set by the provider alone and never negotiated; the CMS file calls it the gross charge. The negotiated rate is a contract term: the price the provider and the payer agreed for one code under one plan, the payer-specific negotiated charge of the CMS file. The record covers three forms of it: a fixed amount, a percent of the chargemaster price, and a percent of a reference fee schedule. In the provider file we profile, \sheetPctShare\% of the rows that carry a value are percent-of-charges rates, so their dollar value moves whenever the provider changes the chargemaster, which the payer does not sign. Contracts also carry terms the record does not cover: lesser-of-charges clauses, outlier and stop-loss provisions, carve-outs at a percent of invoice, tiered per diems, bundled and capitated payment, and escalators.
 
 \subsection*{Why the files disagree}
 
-Four causes are visible in the files themselves. First, the identifying fields do not line up: the provider file has setting, the payer file has place-of-service codes; the provider file has a drug unit, the payer file has none; plan names are free text on the provider side and plan clusters on the payer side. Second, each file is a snapshot with one date, and contracts change mid-year. Third, the provider file holds many items under one billing code, with different list prices and sometimes different fixed amounts. Fourth, a percent-of-charges line gives a dollar result that depends on the chargemaster version in force when the file was built. None of these causes can be resolved by comparing the two files, because neither file says what the contract term was.
+The identifying fields do not line up: the provider file has setting where the payer file has place-of-service codes, the provider file has a drug unit and the payer file has none, and plan names are free text on one side and plan clusters on the other. Each file is a snapshot with one date, the refresh cycles differ, and contracts change mid-year. The provider file holds many items under one billing code, with different list prices and sometimes different fixed amounts, and a percent-of-charges line gives a dollar result that depends on the chargemaster version in force when the file was built. Comparing the files resolves none of this, because neither says what the contract term was.
 
 \section*{Related work}
 
-\textbf{Price transparency studies.} Jiang and colleagues measured compliance with the hospital rule across the national landscape \cite{jiang2022}. Wang and colleagues found Transparency in Coverage prices consistent with other commercial sources \cite{wang2023}, and Henderson and Mouslim cross-validated insurer and hospital files \cite{henderson2024}. Two advocacy and industry groups publish recurring reports on file availability and quality \cite{turquoise,pra}. The 2026 industry comparison of hospital and payer files is the direct motivation for this paper \cite{trilliant}. All of these compare one-party files. None proposes a record that both parties sign.
+\textbf{Price transparency.} Sinaiko and Rosenthal, and later Mehrotra and colleagues, set out what price publication can and cannot change \cite{sinaiko2011,mehrotra2018}. Gondi and colleagues and Jiang and colleagues measured early and national hospital compliance with the rule \cite{gondi2021,jiang2022}. Wang and colleagues found Transparency in Coverage prices consistent with other commercial sources \cite{wang2023}. Henderson and Mouslim cross-validated one regional insurer's file with 26 hospitals' files on maternity codes: 16.3\% of hospital observations appeared in both files, and where both had a price, 77.4\% agreed to the cent and 84.4\% fell within 10\% \cite{henderson2024}. Two advocacy and industry groups publish recurring reports on file availability and quality \cite{turquoise,pra}; the 2026 comparison is the direct motivation for this paper \cite{trilliant}. Every one of these studies works from files that a single party produced.
 
-\textbf{One-party attestation.} The CY2024 OPPS final rule added an affirmation statement to the hospital file: the hospital attests that the file is true, accurate, and complete, and must disclose an estimated allowed amount when a dollar rate cannot be given \cite{opps2024}. This is the closest regulatory precedent. It binds one party to its own file. CORAL binds both parties to one record.
+\textbf{One-party attestation and two-party estimates.} The CY2024 OPPS final rule added an affirmation statement to the hospital file \cite{opps2024}; the CY2026 rule extends it, names a senior official, replaces the estimated allowed amount with percentile allowed amounts from remittance data, and adds the hospital's Type 2 NPIs to the file \cite{opps2026}. Each binds the hospital to its own file only. The No Surprises Act's good faith estimate and advanced explanation of benefits move a price estimate from provider to plan to patient for one visit \cite{nsa}, carried in FHIR by the HL7 Da Vinci Patient Cost Transparency guide \cite{pct}; it is a two-party exchange, but per visit, and neither party signs the other's figure.
 
-\textbf{Ledgers in health care.} Kuo, Kim, and Ohno-Machado survey distributed ledger applications in biomedicine and give the conditions under which a ledger adds value over a database: several parties that do not trust one operator, a shared need for an append-only history, and no acceptable neutral host \cite{kuo2017}. Claims and directory networks on permissioned ledgers exist: Change Healthcare's claims network on Hyperledger Fabric \cite{change2018}, the Synaptic Health Alliance provider directory \cite{synaptic}, and ProCredEx for practitioner credentials \cite{procredex}. None holds a contract term with both parties' signatures.
+\textbf{Ledgers in health care.} Kuo, Kim, and Ohno-Machado give the conditions under which a ledger adds value over a database: several parties that do not trust one operator, a shared need for an append-only history, and no acceptable neutral host \cite{kuo2017}. Claims and directory networks on permissioned ledgers exist: a national clearinghouse's claims network on Hyperledger Fabric \cite{change2018}, a payer consortium's provider directory \cite{synaptic}, a practitioner credentials exchange \cite{procredex}, and a smart-contract store for insurance records \cite{mistore2018}. What each holds is a fact that one party asserts.
 
-\textbf{Transparency logs.} Certificate Transparency \cite{ct}, Trillian, and the IETF SCITT architecture \cite{scitt} give an append-only log under one operator with inclusion proofs. PeerReview \cite{peerreview} and SUNDR \cite{sundr} detect equivocation by a log operator. Zieglmeier shows that an append to a chain proves the sender's action and not the counterparty's receipt \cite{zieglmeier2023}; CORAL answers this by requiring the counterparty's signature inside the record. A one-operator log would serve CORAL if providers, payers, and the regulator accepted one of them as the operator. We return to this question in the Discussion.
+\textbf{Transparency logs.} Certificate Transparency \cite{ct,rfc6962}, Trillian \cite{trillian}, and the IETF SCITT architecture \cite{scitt} give an append-only log under one operator with inclusion proofs. PeerReview \cite{peerreview} and SUNDR \cite{sundr} detect equivocation by a log operator. Zieglmeier shows that an append to a chain proves the sender's action and not the counterparty's receipt \cite{zieglmeier2023}; CORAL answers this with the counterparty's signature inside the record. A one-operator log would serve CORAL if providers, payers, and the regulator accepted one operator; the Discussion returns to this.
 
-\textbf{Signing.} EIP-712 defines typed structured data signing so that a signing tool shows the fields to the person who signs and binds the signature to one deployment \cite{eip712}. We use it for every record.
+\textbf{Signing.} EIP-712 defines typed structured data signing, which shows the signer the fields and binds the signature to one deployment \cite{eip712}; every record uses it.
 
 \section*{Methods}
 
 \subsection*{The record}
 
-A rate record has a key and a value. The key is the set of fields that identify one rate: payer id, plan id, provider id (the contracting tax identification number), billing NPI, billing code with its type, modifiers, setting (inpatient or outpatient), billing class (facility or professional), and drug unit of measure. Two records equal on all key fields are the same rate. The value is the formula (fixed, percent of charges, or percent of reference), the amount in cents or basis points, the start and end dates, a contract version label, a reference version (the chargemaster or fee-schedule version a percent rate applies to), and the id of the record this one supersedes, if any.
+A rate record has a key and a value (Figure~2). The key is the set of fields that identify one rate; two records equal on all key fields are the same rate. The value gives the formula (fixed, percent of charges, or percent of reference), the amount in cents or basis points, the start and end dates, a contract version label, a reference version (the chargemaster or fee-schedule version a percent rate applies to), and the id of the record this one supersedes, if any.
 
-The setting and billing class fields come from the CMS file. The payer file carries billing class directly (institutional or professional) and, for professional prices, setting through place-of-service codes: 21 is inpatient; 19, 22, 23, and 24 are outpatient. An institutional price carries no place of service. A DRG prices an admission and is inpatient; any other institutional price is taken as applying in both settings, as the CMS file's ``both'' does, and the parser counts how often it did so. A professional price with no place of service has no setting, and the parser reports it rather than guessing. The payer file has no drug unit.
+\begin{figure}[!htb]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize}]
+\matrix (M) [matrix of nodes, row sep=0.3mm, column sep=9mm, nodes={anchor=center, minimum height=1.0em, inner sep=1.2pt}] {
+ |[file]| payer\_name & |[rec]| payer id & |[file]| reporting entity (file) \\
+ |[file]| plan\_name (free text) & |[rec]| plan id & |[file]| plan cluster (file) \\
+ |[file]| TIN (file header) & |[rec]| provider id (TIN) & |[file]| provider\_groups.tin \\
+ |[file]| type\_2\_npi (header; per row from CY2026) & |[rec]| billing NPI & |[file]| provider\_groups.npi \\
+ |[file]| code | code\_type & |[rec]| billing code + type & |[file]| billing\_code + type \\
+ |[file]| modifiers & |[rec]| modifiers & |[file]| modifiers \\
+ |[file]| setting (inpatient / outpatient / both) & |[rec]| setting & |[file]| service\_code (place of service) \\
+ |[file]| billing\_class & |[rec]| billing class & |[file]| billing\_class \\
+ |[file]| drug\_unit\_of\_measurement & |[rec]| drug unit & |[file]| \textit{none} \\
+ |[file]| methodology; dollar / percentage / algorithm & |[rec]| formula; amount & |[file]| negotiated\_type; negotiated\_rate \\
+ |[file]| last\_updated\_on (file) & |[rec]| start, end; contract version; reference version; supersedes & |[file]| expiration\_date \\
+};
+\node[lbl, above=0.5mm of M-1-1] {\textbf{Provider file (CMS CSV)}};
+\node[lbl, above=0.5mm of M-1-2] {\textbf{Record}};
+\node[lbl, above=0.5mm of M-1-3] {\textbf{Payer file (TiC JSON)}};
+\foreach \i in {1,...,11} { \draw[arr] (M-\i-1.east) -- (M-\i-2.west); \draw[arr] (M-\i-3.west) -- (M-\i-2.east); }
+\begin{scope}[on background layer]
+\node[draw, dashed, rounded corners, inner sep=1.5pt, fit=(M-1-2)(M-9-2), label={[lbl]above right:}] (K) {};
+\node[draw, dashed, rounded corners, inner sep=1.5pt, fit=(M-10-2)(M-11-2)] (V) {};
+\end{scope}
+\node[lbl, rotate=90, anchor=south] at ([xshift=-1mm]K.west) {key};
+\node[lbl, rotate=90, anchor=south] at ([xshift=-1mm]V.west) {value};
+\end{tikzpicture}
+\caption{The rate record and where each field comes from in the two public formats. The contract version and the supersedes link exist in neither file; they are what make a verdict possible.}
+\end{figure}
 
-Four other record types support the rate record. An Entity binds an entity id to a root public key. A Delegation authorizes a signing key for an entity over a time window. A Revocation ends a signing key from a time at or after the block that carries it. A Chargemaster Version is the provider's signature over a version label, the SHA-256 of the chargemaster file, and an effective date; a percent-of-charges record names it, so the dollar result recomputes from signed inputs.
+The setting and billing class fields come from the CMS file. The payer file carries billing class directly and, for professional prices, setting through place-of-service codes: 21 is inpatient; 19, 22, 23, and 24 are outpatient. An institutional price carries no place of service: a DRG is inpatient, and any other institutional price is taken as applying in both settings, as the CMS file's ``both'' does; the parser counts how often it did so, and counts a professional price with no place of service as unknown. The payer file has no drug unit.
+
+Entity, Delegation, Revocation, and Chargemaster Version records support the rate record. An Entity binds an entity id to a root public key. A Delegation authorizes a signing key for an entity over a time window. A Revocation ends a signing key from a time at or after the block that carries it. A Chargemaster Version is the provider's signature over a version label, the SHA-256 of the chargemaster file, and an effective date; a percent-of-charges record names it, so the dollar result recomputes from signed inputs.
 
 \subsection*{Identity and keys}
 
-The provider's identity root is its tax identification number, because contracts are signed at that level and the payer file carries it. The payer's root is a payer id; the prototype uses an opaque string, and a deployment would use the HIOS issuer id or the X12 payer id. CMS is the registrar. CMS already receives both files and already proofs both kinds of organization through PECOS and the Identity and Access Management System. The registrar binds an entity id to a root key once, after out-of-band proofing, and never signs a rate.
+The provider's identity root is its tax identification number, because contracts are signed at that level and the payer file carries it; a system with several TINs holds one root per TIN. The payer's root is an identifier the payer file schema allows, the HIOS issuer id or, for a self-funded plan sponsor, its EIN; the national health plan identifier was rescinded in 2019 \cite{hpid}. The registrar binds an entity id to a root key once, after out-of-band proofing, and never signs a rate (Figure~3). Neither rule sends a file to a regulator: each party posts its file on its own site, CMS enforces the hospital rule, and HHS, Labor, and Treasury enforce the Transparency in Coverage rule, with states as primary enforcers for issuers \cite{tic}. The registrar needs identity proofing only, which CMS already does for hospitals through PECOS and for issuers through HIOS, so the prototype makes CMS the registrar.
 
-Each entity holds one root key offline and delegates one or more signing keys to the system that produces its rate sheet. The root signs delegations and revocations only; it cannot sign a rate, because the registry checks a rate signer against delegations and a root has none. A verifier answers ``was key $K$ authorized for entity $E$ at time $T$'' from the registry alone.
+Each entity holds one root key offline and delegates one or more signing keys to the system that produces its rate sheet, which for many providers is a vendor's system; the delegation is on the registry and a revocation ends it. The root signs delegations and revocations only. It cannot sign a rate, because the registry checks a rate signer against delegations and a root has none. A verifier answers ``was key $K$ authorized for entity $E$ at time $T$'' from the registry alone.
 
-Validity is judged at the block timestamp of the commit, which consensus sets, not the signer. A revocation must take effect at or after the block that carries it, so a root cannot backdate a revocation to before a record its signing key committed; records committed before a revocation stand. Root replacement after loss is proposed by the registrar, takes effect after seven days, and the current root can veto it during that window with its signature. Without the delay the registrar would be a single operator in all but name.
+Validity is judged at the block timestamp of the commit, a time that consensus sets within the block period and the signer cannot choose. A revocation must take effect at or after the block that carries it, so a root cannot backdate a revocation to before a record its signing key committed; records committed before a revocation stand. Root replacement after loss is proposed by the registrar, takes effect after seven days, and the current root can veto it during that window with its signature. The delay gives the entity notice before the registrar can re-key it. Loss is covered and theft is not: a holder of a stolen root can veto its own replacement, and a registrar override after a longer delay is a design we have not built.
+
+\begin{figure}[!htb]
+\centering
+\begin{tikzpicture}[node distance=3mm and 6mm]
+\node[party] (reg) {Registrar (CMS)\\binds entity id to root key once};
+\node[party, below left=4mm and -6mm of reg] (pr) {Provider root key\\TIN; offline};
+\node[party, below right=4mm and -6mm of reg] (qr) {Payer root key\\HIOS id or EIN; offline};
+\node[box, below=3.5mm of pr] (ps) {Provider signing key(s)\\rate system or vendor};
+\node[box, below=3.5mm of qr] (qs) {Payer signing key(s)\\rate system};
+\draw[arr] (reg) -- node[lbl,left,xshift=-1mm]{register} (pr);
+\draw[arr] (reg) -- node[lbl,right,xshift=1mm]{register} (qr);
+\draw[arr] (pr) -- node[lbl,left,xshift=-1mm]{delegate, revoke} (ps);
+\draw[arr] (qr) -- node[lbl,right,xshift=1mm]{delegate, revoke} (qs);
+\node[lbl, below=1.5mm of $(ps.south)!0.5!(qs.south)$] {roots sign delegations and revocations only; signing keys sign rates};
+\begin{scope}[xshift=68mm, yshift=3mm]
+\draw[arr] (0,0) -- (84mm,0);
+\foreach \x/\l in {6/delegate $K$, 28/commit record\\(block time $t_b$), 50/revoke $K$ from\\$t_r \geq$ block time, 72/commit with $K$:\\rejected} {
+  \draw[thick] (\x mm,-1mm) -- (\x mm,1mm); \node[lbl, below=0.5mm, text width=21mm] at (\x mm,-1mm) {\l};
+}
+\draw[{Bar}-{Bar}, thick, blue!60!black] (6mm,3.5mm) -- node[lbl,above]{$K$ authorized; the record at $t_b$ stays valid} (50mm,3.5mm);
+\draw[arr] (0,-17mm) -- (84mm,-17mm);
+\foreach \x/\l in {6/registrar proposes\\a new root, 66/day 7: activate} {
+  \draw[thick] (\x mm,-18mm) -- (\x mm,-16mm); \node[lbl, below=0.5mm, text width=21mm] at (\x mm,-18mm) {\l};
+}
+\draw[{Bar}-{Bar}, thick, red!70!black] (6mm,-13.5mm) -- node[lbl,above]{current root can veto} (66mm,-13.5mm);
+\end{scope}
+\end{tikzpicture}
+\caption{Keys and time rules. Left: the registrar binds each entity to a root; roots delegate signing keys. Right: validity is judged at block time; a revocation cannot start before its block; root replacement waits seven days under a veto.}
+\end{figure}
 
 \subsection*{The registry}
 
-The registry is one contract on a permissioned Ethereum-compatible network. Each action carries EIP-712 signatures over a typed structure; the domain binds the chain id and contract address, so a signature for one deployment is not valid on another. Both parties sign the same structure hash, and that hash is the record id. Identifier fields are 32-byte strings; a longer identifier is stored as its hash, and the published file must carry the full text. Anyone can relay the transaction; the relayer has no authority. Records can be committed one at a time or in a batch that succeeds or fails as a whole.
+The registry is one contract on a permissioned Ethereum-compatible network (Figure~4). Each action carries EIP-712 signatures over a typed structure; the domain binds the chain id and contract address, so a signature for one deployment is not valid on another. Both parties sign the same structure hash, and that hash is the record id. Identifier fields are 32-byte strings; a longer identifier is stored as its hash, and the published file must carry the full text. Anyone can relay the transaction, and the relayer has no authority. Records commit one at a time or in a batch that succeeds or fails as a whole.
 
-One record is live per key at any time. A new record for a key whose window overlaps a live record is rejected, unless it names that record in its supersedes field; the old record then ends where the new one starts. Both parties sign the new record, so an amendment carries both signatures and the history of a key is a chain of records. A verifier therefore never finds two answers for one date.
+One record is live per key at any time. A new record for a key whose window overlaps a live record is rejected, unless it names that record in its supersedes field; the old record then ends where the new one starts. Both parties sign the new record, so an amendment carries both signatures and the history of a key is a chain of records. At any block height a verifier finds one answer for one date; a superseding record may start in the past, so a verdict is reported as of a block height and can change when a later record supersedes.
 
-The prototype network is Hyperledger Besu with IBFT 2.0 consensus \cite{besu} and four validators, which stand for CMS, a provider association, a payer association, and an auditor. Validators order transactions; they cannot sign a rate. The choice of a replicated ledger over a one-operator log is a governance choice, discussed below.
+The prototype network is Hyperledger Besu 26.10.2 with IBFT 2.0 consensus \cite{besu}, a two-second block period, and four validators, which stand for CMS, a provider association, a payer association, and an auditor. Validators order transactions; they cannot sign a rate. In every run all four validators ran in Docker on one laptop with a 10-core ARM processor and 64 GB of memory, so the throughput figures carry no network latency. Read access in the prototype is open to any node; a deployment sets it as policy.
+
+\begin{figure}[!htb]
+\centering
+\begin{tikzpicture}[node distance=2.5mm and 3mm]
+\node[party] (p) {Provider rate system\\signs structure hash $h$};
+\node[party, right=of p] (q) {Payer rate system\\signs the same $h$};
+\node[box, right=of q] (r) {Any relayer submits\\(record, sig 1, sig 2)};
+\node[dec, right=of r] (c1) {both signers delegated\\at block time?};
+\node[dec, right=of c1] (c2) {window overlaps a live\\record for this key?};
+\node[dec, below=of c2] (c3) {names it in\\supersedes?};
+\node[ledger, left=6mm of c3] (st) {store record, id $= h$;\\end the old record};
+\node[verdict, right=of c3] (rej) {reject: SignerNotAuthorized,\\OverlappingWindow,\\AlreadyCommitted, \ldots};
+\draw[arr] (p) -- (q); \draw[arr] (q) -- (r); \draw[arr] (r) -- (c1);
+\draw[arr] (c1) -- node[lbl,above]{yes} (c2);
+\draw[arr] (c2) -- node[lbl,right]{yes} (c3);
+\draw[arr] (c3) -- node[lbl,above]{yes} (st);
+\draw[arr] (c3) -- node[lbl,above]{no} (rej);
+\draw[arr] (c2.south) -- node[lbl,left,pos=0.4]{no} (st.north -| c2.south) -- (st.north -| c2.south);
+\draw[arr] (c1.north) -- node[lbl,left]{no} ++(0,3mm) -| (rej.north);
+\begin{scope}[yshift=-24mm]
+\node[lbl, anchor=west] at (0,3.5mm) {\textbf{One key over time:}};
+\draw[arr] (28mm,0) -- (146mm,0) node[lbl,right]{date};
+\draw[{Bar}-{Stealth}, thick, orange!80!black] (32mm,2.5mm) -- node[lbl,above]{record 1: \$1,200, start Jan 1, open end} (88mm,2.5mm);
+\draw[{Bar}-{Stealth}, thick, orange!80!black] (88mm,-3.5mm) -- node[lbl,below]{record 2: \$1,260, start Jul 1, supersedes record 1, which now ends Jul 1} (140mm,-3.5mm);
+\draw[dashed] (88mm,-4.5mm) -- (88mm,4.5mm);
+\end{scope}
+\end{tikzpicture}
+\caption{Commit path and supersession. The contract checks both signers against delegations at block time, rejects an overlapping window unless the new record names the live one, and keeps one live record per key.}
+\end{figure}
 
 \subsection*{Verification}
 
-A verifier reads the registry once into an index by key, then checks each published line with one lookup. The verdict for a line is one of: match; amount differs; no record (the key was never signed); expired (signed, but no window covers the date); ambiguous (reserved; the registry now prevents it); or needs chargemaster (a percent rate whose list price is not available). For a fixed rate the expected amount is the signed value. For a percent-of-charges rate it is the signed percent of the list price for that code, setting, and unit in the chargemaster version the record names. A provider line that publishes the percent is compared on the percent; a line that publishes only the dollar result is compared on the recomputed dollar.
+A verifier reads the registry once into an index by key, then checks each published line with one lookup; Figure~5 gives the verdicts. For a fixed rate the expected amount is the signed value. For a percent-of-charges rate it is the signed percent of the list price for that code, setting, and unit in the chargemaster version the record names; a provider line that publishes the percent is compared on the percent, and a line that publishes only the dollar result is compared on the recomputed dollar. When both files are verified, a pair of lines resolves to both match the record, payer file departs, provider file departs, both depart, or unsigned. The two files alone give no such verdict.
 
-When both files are verified, a pair of lines that disagree resolves to one of: both match the record (the files agree with the record and so with each other), payer file departs, provider file departs, or unsigned. Today such a pair resolves to nothing.
+\begin{figure}[!htb]
+\centering
+\begin{tikzpicture}[node distance=2mm and 2.5mm]
+\node[file] (ln) {published line\\key, value, date};
+\node[dec, right=of ln] (d1) {key in\\index?};
+\node[dec, right=of d1] (d2) {a window\\covers the\\date?};
+\node[dec, right=of d2] (d3) {percent record, dollar-only\\line, no list price?};
+\node[dec, right=of d3] (d4) {published\\$=$ expected?};
+\node[ledger, right=of d4] (v5) {match};
+\node[verdict, below=of d1] (v1) {no record};
+\node[verdict, below=of d2] (v2) {expired};
+\node[verdict, below=of d3] (v3) {needs chargemaster};
+\node[verdict, below=of d4] (v4) {amount differs};
+\draw[arr] (ln) -- (d1); \draw[arr] (d1) -- node[lbl,above]{yes} (d2); \draw[arr] (d2) -- node[lbl,above]{yes} (d3);
+\draw[arr] (d3) -- node[lbl,above]{no} (d4); \draw[arr] (d4) -- node[lbl,above]{yes} (v5);
+\draw[arr] (d1) -- node[lbl,right]{no} (v1); \draw[arr] (d2) -- node[lbl,right]{no} (v2);
+\draw[arr] (d3) -- node[lbl,right]{yes} (v3); \draw[arr] (d4) -- node[lbl,right]{no} (v4);
+\begin{scope}[yshift=-25mm]
+\matrix (P) [matrix of nodes, nodes={font=\scriptsize, minimum height=1.4em, minimum width=24mm, anchor=center, inner sep=2pt}, row sep=0.5mm, column sep=0.5mm] {
+ |[lbl]| pair of lines & |[lbl]| payer line: match & |[lbl]| payer line: differs \\
+ |[lbl]| provider line: match & |[ledger]| both match the record & |[verdict]| payer file departs \\
+ |[lbl]| provider line: differs & |[verdict]| provider file departs & |[verdict]| both depart \\
+};
+\node[lbl, right=3mm of P] {either line \textit{no record}: unsigned};
+\end{scope}
+\end{tikzpicture}
+\caption{Verdict for one published line (top) and for a pair of lines from the two files (bottom). A difference between the files is attributed to the line that departs from the signed record.}
+\end{figure}
 
 \subsection*{Evaluation design}
 
-\textbf{Full-sheet run.} We take the public file of provider A, a hospital in Colorado (file dated 2025-11-01; CMS format 3.0.0). Providers are lettered A to E in this paper; payers are not named. Every payer named in the file is registered with prototype keys. Every row with a percentage becomes a percent-of-charges record that names a signed chargemaster version; every other row with a dollar amount becomes a fixed record; rows with only an algorithm carry nothing a record can hold and are counted. One record is signed per key; a second row with the same key and a different value is a key collision and is counted. Both signatures come from prototype keys, so the run measures mechanism and cost, not whether the file is correct. We then verify every row of the file against the registry, and again after altering 1\% of rows.
+\textbf{Full-sheet run.} We take the public file of provider A, a hospital in Colorado (file dated 2025-11-01; CMS format 3.0.0). Providers are lettered A to E in this paper; payers are not named. Every payer named in the file is registered with prototype keys. Every row with a percentage becomes a percent-of-charges record that names a signed chargemaster version; every other row with a dollar amount becomes a fixed record; rows with only an algorithm are counted. One record is signed per key, from the first row in file order; a later row with the same key and a different value is a key collision and is counted. We then verify every row with a standard code and a value against the registry, and again after altering 1\% of those rows.
 
-\textbf{Pair run on real data.} We take five providers' files (Table~2) and one Transparency in Coverage in-network file of a national commercial payer, payer P (one plan cluster, dated 2026-10-05, 547 plans, 1.69 GB compressed). For each provider we keep the rows for payer P's commercial plans on the 16 codes of the 2026 study and map the file's plan name to one label; the crosswalk is manual and listed in the code. From the payer file we keep prices for the five providers' NPIs on the same codes. We pair on the record key and report the measure of the 2026 study: exact match, within 10\%, and more than 50\% apart. This is the agreement before signing.
+\textbf{Pair run on real data.} We take five providers' files (Table~2) and one Transparency in Coverage in-network file of a national commercial payer, payer P (one plan cluster, dated 2026-10-05, 547 plans, 1.69 GB compressed). For each provider we keep the rows for payer P's commercial plans on the 16 codes of the 2026 report and map the file's plan name to one label; the crosswalk is manual and listed in the code, and maps every commercial plan of the cluster to that label because the provider file names the product line, not the plan. From the payer file we keep prices for the five providers' NPIs on the same codes, pooled under one NPI per provider, so the pairing is at the TIN level (provider E lists eight NPIs). We pair on the record key. A key has several payer values when several plans in the cluster price it; the primary measure pairs each provider line with the nearest payer value of the same kind, dollars with dollars and percent with percent, and we also report the pairing of each provider line with every payer value of its key. Both measures report exact match, within 10\%, and more than 50\% apart, over the pairs where both sides give the same kind of value.
 
-\textbf{Synthetic attribution.} For each paired key we sign one record with the provider's published amount as the agreed value. We then alter 10\% of provider lines and 10\% of payer lines at random by $\pm$10\%, +50\%, or $-$50\%, verify both copies, and report the attribution of each remaining difference. The signatures are prototype keys; the run shows the mechanism, not the parties' agreement.
+\textbf{Synthetic attribution.} For each paired key with a provider dollar amount we sign one record with that amount as the agreed value, with prototype keys on both sides. We then build two copies of the signed value, one labeled provider and one labeled payer, alter 10\% of the lines in each copy at random by $\pm$10\%, +50\%, or $-$50\%, verify both copies, and report the attribution of each difference. Both copies start from the record, so the run is a functional test of the attribution step and says nothing about real agreement; the payer never agreed the signed value.
+
+\textbf{Key rotation.} On the running network we commit a record with a payer signing key, delegate a new key, revoke the old one, and repeat the commit with each key; we then attempt a backdated revocation, a root replacement before its delay, and a root replacement after a veto.
 
 \textbf{Discovery.} We record how many provider files could be found and parsed. The CMS locator file (\texttt{cms-hpt.txt}) at each provider's domain names the file.
 
-All code, the contract, the parsers, and the run output are in the repository \cite{repo}. Tests cover commit and read, duplicate rejection, unauthorized and wrong-side keys, revocation and its time bound, delegation windows, root signing prohibition, domain binding, root replacement with delay and veto, overlapping windows, supersession, batch commit, and both verifier paths.
+All code, the contract, the parsers, the run output, and the contract tests (sixteen, one per rule above) are in the repository \cite{repo}.
 
 \section*{Results}
 
 \subsection*{Full-sheet run}
 
-The file has \sheetRows{} rows. \sheetNoCode{} rows carry only a chargemaster, revenue, or NDC code and no CPT, HCPCS, or MS-DRG code; a record needs a code both parties use, so these rows are outside the record format. The remaining \sheetLines{} rows name \sheetPayers{} payers. \sheetAlgorithm{} rows give an algorithm and no dollar or percent value. The rest reduce to \sheetRecords{} records: \sheetFixed{} fixed and \sheetPercent{} percent of charges. \sheetCollisions{} rows have a key that already had a record with a different value. These are items with the same billing code, setting, class, and unit but a different list price and a different fixed amount; the key fields that the public formats offer do not separate them, and a record for them needs an item-level identifier.
+The file has \sheetRows{} rows (Figure~6a). \sheetNoCode{} rows carry only a chargemaster, revenue, or NDC code and no CPT, HCPCS, or MS-DRG code; a record needs a code both parties use, so these rows are outside the record format. The remaining \sheetLines{} rows name \sheetPayers{} payers, and \sheetAlgorithm{} of them give an algorithm and no dollar or percent value. The \sheetVerifyLines{} rows with a value reduce to \sheetRecords{} records, \sheetFixed{} fixed and \sheetPercent{} percent of charges: \sheetRepeats{} rows repeat the key and value of an earlier row, and \sheetCollisions{} rows carry a different value for a key already signed, on \sheetKeysMulti{} keys that hold \sheetRowsMulti{} rows between them. These are items with the same billing code, setting, class, and unit but a different list price and a different fixed amount, which the key fields of the public formats do not separate; the record on such a key holds the first row's value.
 
-Table~1 gives the cost. Signing ran at \sheetSigPerS{} signatures per second on one laptop. Commits ran \sheetBatch{} records per transaction with eight transactions in flight, at \sheetRecPerS{} records per second over the run, so the sheet takes \sheetCommitMin{} minutes. The rate fell as the ledger grew: \sheetRecPerSEarly{} records per second over the first 20,000 records of the run, \sheetRecPerS{} over all of it. Each record costs \sheetGas{} gas, \sheetBytes{} bytes of transaction input, and \sheetDiskBytes{} bytes on one validator's disk, so the sheet adds \sheetDiskMB{} MB to each validator. Gas is reported as a measure of execution work; the network charges no fee.
+Table~1 gives the cost. The run that produced it committed \sheetCommitRun{} records; \sheetAlready{} were on the ledger from two earlier runs that were interrupted, and each validator held \sheetDiskBeforeGB{} GB before it started. Signing ran at \sheetSigPerS{} signatures per second. Commits ran \sheetBatch{} records per transaction with eight transactions in flight, at \sheetRecPerS{} records per second over the run, and the rate fell as the ledger grew (Figure~6b): \sheetRecPerSEarly{} records per second over the first 20,000 records of the run. The minutes for the sheet, \sheetCommitMin, and its storage, \sheetDiskMB{} MB per validator, are the run's rate and per-record storage applied to all \sheetRecords{} records. Gas is a measure of execution work; the network charges no fee.
 
-\begin{table}[h]
+\begin{table}[t]
 \centering
-\caption{Full-sheet run: one provider file, \sheetPayers{} payers, prototype keys on both sides.}
+\caption{Full-sheet run cost: one provider file, \sheetPayers{} payers, prototype keys on both sides. Rates and per-record figures are measured on the \sheetCommitRun{} records of the final run; figures for the sheet apply them to all \sheetRecords{} records.}
 \small
 \begin{tabular}{lr}
 \toprule
-Rows in file & \sheetRows \\
-Rows with a CPT, HCPCS, or MS-DRG code & \sheetLines \\
-Rows with only an algorithm & \sheetAlgorithm \\
 Records signed (fixed / percent of charges) & \sheetRecords{} (\sheetFixed{} / \sheetPercent) \\
-Rows whose key collided with a different value & \sheetCollisions \\
-Signing, both sides & \sheetSignS{} s (\sheetSigPerS{} signatures/s) \\
+Signing, both sides, final run & \sheetSignS{} s (\sheetSigPerS{} signatures/s) \\
 Commit, \sheetBatch{} records per transaction & \sheetRecPerS{} records/s (\sheetCommitMin{} min for the sheet) \\
 Gas per record & \sheetGas \\
-Transaction input per record & \sheetBytes{} bytes (\sheetCalldataMB{} MB total) \\
+Transaction input per record & \sheetBytes{} bytes (\sheetCalldataMB{} MB in the run) \\
 Validator storage per record / for the sheet & \sheetDiskBytes{} bytes / \sheetDiskMB{} MB \\
-Registry load into the verifier index & \sheetLoadS{} s \\
-Verification of \sheetVerifyLines{} rows & \sheetVerifyS{} s (\sheetLinesPerS{} rows/s) \\
-Clean copy: match / amount differs / other & \sheetCleanMatch{} / \sheetCleanDiffers{} / \sheetCleanOther \\
+Clean copy: match / amount differs / needs chargemaster & \sheetCleanMatch{} / \sheetCleanDiffers{} / \sheetCleanNeedsCM \\
 Altered copy: rows altered / caught / already differed / not comparable & \sheetAltered{} / \sheetCaught{} / \sheetAlreadyDiffers{} / \sheetNotComparable \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Verification of the clean file returned \sheetCleanMatch{} matches, \sheetCleanDiffers{} amount-differs verdicts, and \sheetCleanNeedsCM{} needs-chargemaster verdicts. The amount-differs verdicts are the key collisions: the file carries a second value for a key the registry holds once. The needs-chargemaster verdicts are collision rows that carry a dollar amount for a key whose record is a percent of charges; the verifier needs the list price to compute the expected amount. In the altered copy, \sheetAltered{} rows had their signed value changed; \sheetCaught{} changed from match to amount differs, \sheetAlreadyDiffers{} were collision rows that differed before the change, and \sheetNotComparable{} were needs-chargemaster rows. No altered row that matched before the change matched after it. This run is self-consistency: the records were minted from the rows they are checked against, so a match is expected. What it establishes is that the record format covers every row with a standard code and a value, that the key holds for all but \sheetCollisions{} rows, and the cost of signing a full sheet.
+\begin{figure}[t]
+\centering
+\begin{minipage}[t]{0.56\textwidth}
+\centering
+\begin{tikzpicture}[x=1mm, y=1mm]
+\fill[black!25] (0.00,0) rectangle (23.00,6);
+\fill[black!12] (23.00,0) rectangle (37.47,6);
+\fill[blue!15] (37.47,0) rectangle (49.52,6);
+\fill[red!20] (49.52,0) rectangle (51.52,6);
+\fill[orange!35] (51.52,0) rectangle (79.50,6);
+\fill[orange!60] (79.50,0) rectangle (88.00,6);
+\draw (0,0) rectangle (88.00,6);
+\node[lbl] at (11.50,3) {no standard code\\\sheetNoCode};
+\node[lbl] at (30.23,3) {algorithm only\\\sheetAlgorithm};
+\node[lbl] at (43.49,3) {repeat rows\\\sheetRepeats};
+\node[lbl, above=0mm] at (50.52,6) {collisions \sheetCollisions};
+\node[lbl] at (65.51,3) {fixed records\\\sheetFixed};
+\node[lbl] at (83.75,3) {percent\\\sheetPercent};
+\node[lbl, below=0.5mm] at (44.00,0) {\sheetRows{} rows in the file; \sheetRecords{} records signed};
+\node[lbl, anchor=south west] at (0,9) {\textbf{(a) Where the rows go}};
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.42\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=\textwidth, height=30mm, font=\scriptsize, xlabel={records on the ledger}, ylabel={records/s (run average)},
+  xmin=70000, xmax=265000, ymin=0, ymax=110, scaled x ticks=false, xticklabel style={/pgf/number format/fixed, /pgf/number format/1000 sep={,}},
+  xtick={100000,150000,200000,250000}, ytick={0,25,50,75,100}, grid=major, grid style={black!10}, title style={font=\scriptsize\bfseries, at={(0,1)}, anchor=south west}, title={(b) Commit rate as the ledger grows}]
+\addplot[thick, blue!70!black, no marks] table[x=ledger, y=rate] {results/commit_rate.dat};
+\end{axis}
+\end{tikzpicture}
+\end{minipage}
+\caption{Full-sheet run. (a) Of \sheetRows{} rows, those with a standard code and a value reduce to \sheetRecords{} signed records; repeat rows carry the key and value of an earlier row, collisions carry a different value for a key already signed. (b) The cumulative commit rate of the final run, which started with \sheetAlready{} records on the ledger and fell from \sheetRecPerSEarly{} to \sheetRecPerS{} records per second.}
+\end{figure}
+
+Verification of the clean file returned \sheetCleanMatch{} matches, \sheetCleanDiffers{} amount-differs verdicts, and \sheetCleanNeedsCM{} needs-chargemaster verdicts; both kinds are the key collisions, the latter being collision rows with a dollar amount on a percent-of-charges key. In the altered copy, \sheetAltered{} rows had their signed value changed; \sheetCaught{} changed from match to amount differs, \sheetAlreadyDiffers{} were collision rows that differed before the change, and \sheetNotComparable{} were needs-chargemaster rows. No altered row that matched before the change matched after it. This run is self-consistency: the records were minted from the rows they are checked against, so a match is expected. It establishes that the record format covers every row with a standard code and a value, that the key holds for all but \sheetCollisions{} rows, and the cost of signing a full sheet.
 
 \subsection*{Discovery}
 
-Of ten health systems tried on 2026-10-27, four served the CMS locator file. Of ten tried on 2026-11-03, four served a tall CSV, four served JSON, one served a wide CSV, and one served an empty archive. The JSON files are valid under the rule and our parser does not read them. On the payer side, one national payer publishes files of 9 GB and more per plan, which we did not download; payer P publishes 5,697 in-network files by plan cluster of about 1.7 GB each, with no state in the name. The pair run therefore covers one payer.
+Of ten health systems tried on 2026-10-27, four served the CMS locator file. Of ten tried on 2026-11-03, four served a tall CSV, four served JSON, one a wide CSV, and one an empty archive; the JSON files are valid under the rule and our parser does not read them. On the payer side, one national payer publishes files of 9 GB and more per plan, which we did not download; payer P publishes 5,697 in-network files by plan cluster of about 1.7 GB each, with no state in the name. The pair run therefore covers one payer.
 
 \subsection*{Pair run on real data}
 
-Table~2 gives, per provider, the keys on each side and the agreement on paired keys. Payer P's file lists \pairPayerLines{} prices for the five providers' NPIs on the 16 codes, \pairPayerUnique{} after lines with the same key and value are merged. The crosswalk maps every commercial plan of payer P in the file to one label, so a key has \pairValuesPerKey{} payer values on average; each provider line is paired with the nearest payer value of the same kind, dollars with dollars and percent of charges with percent of charges. Across providers, \pairAll{} provider lines paired. \pairComparable{} carry the same kind of value on both sides; \pairNotComparable{} carry a dollar on one side and a percent of charges on the other and cannot be compared. Of the comparable pairs, \pairExact\% matched exactly, \pairWithinTen\% fell within 10\%, and \pairOverFifty\% differed by more than 50\%. Paired against every payer value of the key instead of the nearest, \pairLineExact\% of \pairLineComparable{} comparable pairs matched exactly. Table~3 gives the nearest-value measure by code group.
+Table~2 gives, per provider, the keys on each side and the agreement on paired keys; Figure~7a shows the counts. Payer P's file lists \pairPayerLines{} prices for the five providers' NPIs on the 16 codes, \pairPayerUnique{} after lines with the same key and value are merged, and a paired key has \pairValuesPerKey{} payer values on average. Across providers, \pairAll{} provider lines paired; \pairComparable{} carry the same kind of value on both sides, and \pairNotComparable{} carry a dollar on one side and a percent of charges on the other and cannot be compared. Of the \pairComparable{} comparable pairs, \pairExactCount{} (\pairExact\%) matched exactly, \pairWithinTen\% fell within 10\%, and \pairOverFifty\% differed by more than 50\%. Paired against every payer value of the key instead of the nearest, there are \pairLineAll{} pairs, \pairLineComparable{} comparable, of which \pairLineExactCount{} (\pairLineExact\%) matched exactly, \pairLineWithinTen\% fell within 10\%, and \pairLineOverFifty\% differed by more than 50\%. Provider A has no pair: its rows for payer P on the 16 codes are all under a Medicare Advantage plan, which the Transparency in Coverage rule does not cover. By code group under the nearest-value measure, the inpatient codes give 17 comparable pairs with 29.4\% exact, the gastroenterology codes 10 with 70.0\%, and the orthopedic codes 6 with 50.0\%; every group is 90\% or more within 10\%. The comparable sample is small, \pairComparable{} pairs from four providers, of which provider B gives 19.
 
-\begin{table}[h]
+\begin{table}[t]
 \centering
-\caption{Five providers against payer P's file on the 16 codes of the 2026 study. Keys: distinct record keys on each side. Pairs: provider lines with a payer value for the same key; comparable: both sides give the same kind of value. Percentages are of comparable pairs.}
+\caption{Five providers against payer P's file on the 16 codes of the 2026 report, nearest payer value per provider line. Keys: distinct record keys on each side. Pairs: provider lines with a payer value for the same key; comparable: both sides give the same kind of value. Percentages are of comparable pairs.}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{llrrrrrrrr}
@@ -171,66 +374,145 @@ Provider & File date & Codes & Provider keys & Payer keys & Pairs & Comparable &
 \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{figure}[t]
 \centering
-\caption{Agreement by code group, all five providers.}
-\small
-\begin{tabular}{lrrrrr}
+\begin{minipage}[t]{0.5\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[ybar stacked, width=\textwidth, height=34mm, font=\scriptsize, bar width=7mm, ymin=0, ymax=28,
+  symbolic x coords={A,B,C,D,E}, xtick=data, ylabel={provider lines}, xlabel={provider},
+  legend style={font=\scriptsize, at={(0.02,0.98)}, anchor=north west, draw=none, fill=none, row sep=-2pt}, legend cell align=left,
+  title style={font=\scriptsize\bfseries, at={(0,1)}, anchor=south west}, title={(a) Pair run: agreement between the files}]
+\addplot[fill=green!40] table[x=provider, y=exact] {results/pairs_bars.dat};
+\addplot[fill=yellow!60] table[x=provider, y=within] {results/pairs_bars.dat};
+\addplot[fill=red!40] table[x=provider, y=beyond] {results/pairs_bars.dat};
+\addplot[fill=black!15] table[x=provider, y=notcomp] {results/pairs_bars.dat};
+\legend{exact, within 10\%, beyond 10\%, not comparable}
+\end{axis}
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\begin{tikzpicture}[node distance=1.5mm and 10mm]
+\node[rec] (k) {\synKeys{} signed keys,\\two copies each};
+\node[box, above right=3mm and 10mm of k] (u) {\synUnaltered{} unaltered};
+\node[box, right=10mm of k, yshift=3mm] (pa) {\synProvAltered{} provider copy altered};
+\node[box, right=10mm of k, yshift=-3mm] (qa) {\synPayAltered{} payer copy altered};
+\node[box, below right=3mm and 10mm of k] (ba) {\synBothAltered{} both altered};
+\node[ledger, right=8mm of u] (vu) {both match: \synBothMatch};
+\node[verdict, right=8mm of pa] (vp) {provider departs: \synProviderDeparts};
+\node[verdict, right=8mm of qa] (vq) {payer departs: \synPayerDeparts};
+\node[verdict, right=8mm of ba] (vb) {both depart: \synNeither};
+\foreach \a/\b in {k/u,k/pa,k/qa,k/ba,u/vu,pa/vp,qa/vq,ba/vb} { \draw[arr] (\a) -- (\b); }
+\node[lbl, above=1mm of k.north west, anchor=south west] {\textbf{(b) Synthetic attribution}};
+\end{tikzpicture}
+\end{minipage}
+\caption{(a) Per provider, the comparable pairs by agreement and the pairs that cannot be compared; provider A has no pair. (b) The synthetic run: every altered copy is attributed to its side, and every unaltered pair matches the record on both sides.}
+\end{figure}
+
+\subsection*{Synthetic attribution}
+
+\synKeys{} paired keys had a provider dollar amount; one record was signed for each, and two copies were built (Figure~7b). The planned 10\% alteration touched \synProvAlteredAll{} provider copies and \synPayAlteredAll{} payer copies under seed 7: \synProvAltered{} keys had only the provider copy changed, \synPayAltered{} only the payer copy, and \synBothAltered{} both. Verification attributed \synProviderDeparts{} differences to the provider copy, \synPayerDeparts{} to the payer copy, and \synNeither{} to both; the \synUnaltered{} unaltered keys matched the record on both sides. The construction guarantees this outcome when the clean copy equals the signed value; the run shows that the verifier delivers it.
+
+\subsection*{Key rotation}
+
+Figure~8 gives the sequence on the running network. After the old key's revocation took effect, a commit with it reverted with \texttt{SignerNotAuthorized} and the same commit with the new key succeeded; \texttt{authorizedAt} returned true for the old key at the commit time of its earlier record and false after the revocation, so the earlier record stays valid. A backdated revocation, a root activation before its delay, and a root activation after a veto each reverted with the error the figure names. Activation after the seven-day delay is covered by the unit tests, which move the clock, and was not run on the network.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\draw[arr] (0,0) -- (158mm,0);
+\foreach \x/\l/\o/\c in {
+  6/commit with old key $K_1$/committed/ledger,
+  27/delegate $K_2$/stored/ledger,
+  48/revoke $K_1$ from block $+10$ s/stored/ledger,
+  69/commit with $K_1$/{Signer\\Not\\Authorized}/verdict,
+  90/commit with $K_2$/committed/ledger,
+  111/revoke dated before block/{Backdated\\Revocation}/verdict,
+  132/{propose root, activate now}/{RootDelay\\NotPassed}/verdict,
+  151/{root vetoes; activate}/{NoPending\\Root}/verdict} {
+  \draw[thick] (\x mm,-1mm) -- (\x mm,1mm);
+  \node[lbl, above=1mm, text width=19mm] at (\x mm,1mm) {\l};
+  \node[\c, below=1.5mm, font=\scriptsize\ttfamily, align=center] at (\x mm,-1mm) {\o};
+}
+\end{tikzpicture}
+\caption{Key rotation on the running network, left to right. Shaded outcomes name the contract error that rejected the action; the record committed with $K_1$ before its revocation stays valid.}
+\end{figure}
+
+\section*{Discussion}
+
+The record format holds every row of a real provider file that carries a standard code and a value, \sheetVerifyLines{} of \sheetRows{} rows. The key fields of the public formats identify a rate for all but \sheetCollisions{} rows, on \sheetKeysMulti{} keys; those are items that share a billing code, which the provider file knows by chargemaster code and the payer file does not know at all, and a comparison that pairs by code and payer alone meets them as several provider values for one payer value. Signing and committing a full sheet is a batch job of \sheetCommitMin{} minutes on one laptop, loading the registry into a verifier takes \sheetLoadS{} s, and verifying the file against the loaded index takes \sheetVerifyS{} s.
+
+\textbf{The pair run against the 2026 report.} On the 16 codes, five providers' files and payer P's file agree exactly on \pairExact\% of comparable pairs under the nearest-value pairing and \pairLineExact\% under the all-values pairing, against 9 to 12\% in the 2026 report, and \pairWithinTen\% and \pairLineWithinTen\% within 10\% against about half; Henderson and Mouslim's 77.4\% exact agreement where both files had a price points the same way \cite{henderson2024}. Three things separate our measure from the report's: we pair on the full key, so a provider line meets only payer values for the same plan label, setting, class, and unit, and the report's pairing is not published; we exclude the \pairNotComparable{} of \pairAll{} pairs where one file gives a dollar and the other a percent of charges, which a ratio counts as disagreement; and our sample is \pairComparable{} comparable pairs from four providers against one payer, so each percentage moves by three points per pair. The result does not contradict the report; it suggests that much of what the report measures is definitional, the plan, setting, class, unit, and date on which the two files differ, which are the fields the record fixes. What remains after pairing on the full key is what a signed record would attribute to one file.
+
+\textbf{Scale.} The run gives \sheetDiskBytes{} bytes per record on each validator and \sheetRecPerS{} records per second with the ledger between \sheetAlready{} and \sheetRecords{} records. About \projHospitals{} hospitals, each with a sheet of this size, give \projRecordsB{} billion records, about \projDiskTB{} TB per validator, and about \projCommitDays{} days of commits at the measured rate, before any payer-side record and before the decline in Figure~6b continues. The prototype stores the whole record on chain; the bodies are already in the public files, so a deployment can store the record id and the two signatures only, which we have not built or measured.
+
+\textbf{Why a replicated ledger.} Kuo and colleagues' conditions apply: providers, payers, and CMS each produce their own record of the same term; the history must be append-only, because a rate that changes mid-year must keep its earlier record; and no party is accepted by the others as the operator of the record. A CMS-run signed log with a hash chain would give the same inclusion guarantee. A lighter design exists too: each party signs one Merkle root per sheet per contract version, each published line carries an inclusion proof, and a one-operator log with witnesses detects equivocation; that is one pair of signatures per contract instead of one per rate, and no consensus layer. The per-record form buys two things over it: a mid-year change to one rate is one new record rather than a new sheet, and a verifier needs only the key, not the counterparty's sheet. Whether those are worth a replicated ledger is the governance choice, and whether the regulator should also operate the log is a policy question this paper does not settle. Table~3 gives the trust model as built. The registrar is a single point of trust for identity binding, limited by the delay and veto: it cannot sign a rate, remove a record, or re-key an entity without a week's notice. Three of four validators can reorder or rewrite history, and two can halt the chain; a deployment needs more validators, drawn from parties with opposed interests, or witness checkpoints of the chain head.
+
+\begin{table}[!htb]
+\centering
+\caption{Trust model of the prototype: what each actor can do and what the registry prevents or detects.}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lp{5.0cm}p{8.4cm}}
 \toprule
-Group & Pairs & Comparable & Exact \% & Within 10\% & Over 50\% \\
+Actor & Can do & Prevented or detected \\
 \midrule
-\pairGroupRows
+Rate signer (either party) & sign any value for its side & cannot commit alone; record needs the counterparty's signature \\
+Signing-key holder (vendor) & sign within the delegation window & revocation from block time; records before it stand \\
+Thief of a root key & delegate new keys; veto root replacement & loss is recoverable, theft is not (no registrar override) \\
+Relayer & submit, delay, or withhold a signed record & no authority; a withheld record is resubmitted by either party; a signed draft has no deadline (limitation) \\
+Registrar & bind a root; propose a replacement & cannot sign a rate or remove a record; replacement waits seven days under a veto \\
+One validator & see every record; propose blocks in turn & cannot forge a signature; timestamp bounded by the block period \\
+Three of four validators & reorder or rewrite history & not prevented; needs more validators or external witnesses \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection*{Synthetic attribution}
+\textbf{Privacy and market effects.} Every validator reads every record in plaintext. The rates are public once published, but a record is committed before publication, so a validator run by a payer or provider association sees a competitor's amendments and their timing early; a deployment therefore sets read access as policy and can hold the record body off chain. A shared ledger of rates among competitors also raises the questions any exchange of price data among competitors raises, which a deployment must answer before an association joins as a validator.
 
-\synKeys{} paired keys had a provider dollar amount; one record was signed for each. After alteration, \synProvAltered{} keys had a changed provider line, \synPayAltered{} a changed payer line, and \synBothAltered{} both. Verification attributed \synPayerDeparts{} differences to the payer file, \synProviderDeparts{} to the provider file, and \synNeither{} to both; \synBothMatch{} keys matched the record on both sides. Every altered line was attributed to the side that was altered. Before signing, the same pairs show \synExact\% exact agreement and nothing about which side is wrong.
+\textbf{Adoption.} The second signature does not exist today, and the party that must add it is the one whose file is less likely to be checked. The hospital rule could require that a reported rate cite a jointly signed record, as the CY2024 and CY2026 rules added and extended the affirmation statement \cite{opps2024,opps2026}, and enforcement under 45 CFR 180.90 already covers hospital file content; the payer side needs the three departments that issue the Transparency in Coverage rule. A payer has its own reason to ask for the record as a contract term, as a defense against a provider file that overstates a rate, and a provider association could run the registry for its members and invite payers. Under any route the parties negotiate as now and add a signature step before publication. Where they do not agree a value, no record exists, both lines verify as no record, and the files carry the disagreement in the open. A record signed with a stolen key stands until both parties sign a superseding record.
 
-\subsection*{Key rotation}
-
-On the running network, one record was committed with the payer's signing key; then a new signing key was delegated and the old one revoked from a time ten seconds after the current block. After that time, a commit with the old key reverted with \texttt{SignerNotAuthorized} and the same commit with the new key succeeded. \texttt{authorizedAt} returned true for the old key at the commit time of its earlier record and false after the revocation, so the earlier record stays valid. A revocation dated before the current block reverted with \texttt{BackdatedRevocation}. A root replacement proposed by the registrar reverted on activation with \texttt{RootDelayNotPassed}; after the current root's veto, activation reverted with \texttt{NoPendingRoot} and the root was unchanged.
-
-\section*{Discussion}
-
-\textbf{What the run shows.} The record format holds every row of a real provider file that carries a standard code and a value, which is \sheetLines{} of \sheetRows{} rows. The key fields of the public formats identify a rate for all but \sheetCollisions{} rows. The rows they do not identify are items that share a billing code; the provider file knows them by chargemaster code, and the payer file does not know them at all. Any comparison of the two files is undefined for these rows, and the measure of the 2026 study counts them as disagreement. Signing and committing a full sheet is a batch job of \sheetCommitMin{} minutes on one laptop, and verifying a published file is a job of seconds once the index is loaded.
-
-\textbf{What the comparison shows.} On the 16 codes, five providers' files and payer P's file agree exactly on \pairExact\% of comparable pairs, and \pairNotComparable{} of \pairAll{} pairs cannot be compared because one file gives a dollar amount and the other a percent of charges. The pairing itself required a manual crosswalk of plan names, under which one key has several payer values, and the payer file has no drug unit and no setting beyond the place-of-service code. These are the same gaps the record format closes: a record carries one plan id, one setting, one unit, and one date, agreed by both parties.
-
-\textbf{Why a replicated ledger.} Kuo and colleagues' conditions apply: providers, payers, and CMS each produce their own record of the same term; the history must be append-only, because a rate that changes mid-year must keep its earlier record; and no party is accepted by the others as the operator of the record. A CMS-run signed log with a hash chain would give the same inclusion guarantee, and the registrar role in CORAL is a single point of trust for identity binding. The delay and veto on root replacement limit that trust to identity binding; the registrar cannot sign a rate, cannot remove a record, and cannot re-key an entity without a week's notice to that entity. Whether the regulator should also operate the log is a policy question; the design works under either answer.
-
-\textbf{Adoption.} The second signature does not exist today, and the party that must add it is the one whose file is less likely to be checked. Three routes exist. CMS can require that a rate reported in either file cite a jointly signed record, as the CY2024 rule required an affirmation statement \cite{opps2024}; enforcement under 45 CFR 180.90 already covers file content. A payer can require the signed record as a contract term, because it gives the payer a defense against a provider file that overstates a rate. A provider association can run the registry for its members and invite payers, because the signed record settles which file is wrong before a dispute reaches a regulator. In each route the ledger changes nothing about how rates are negotiated; it changes what is published.
-
-\textbf{Limitations.} Both signatures in every run come from prototype keys, so no run shows that a file is correct, only that a file matches the record it was minted from. The chargemaster version signed is the SHA-256 of the provider file itself, which carries the list prices; a deployment would sign the chargemaster as a separate file. The record carries a contract version and dates that no public file holds; the runs set them to one label and one date. Percent-of-reference rates and algorithm-only rows (\sheetAlgorithm{} rows here) are not covered. The pair run covers one payer, five providers, and 16 codes, after a manual plan crosswalk, and the provider files are dated between 2025-11-01 and 2026-11-03 against a payer file dated 2026-10-05. The discovery rate shows that a national reproduction is a data engineering project before it is a study. The registry rejects overlapping windows but cannot detect a rate that both parties signed wrongly.
+\textbf{Limitations.} Both signatures in every run come from prototype keys, so no run shows that a file is correct, only that a file matches the record it was minted from; the synthetic run tests attribution on two copies of the signed value. The chargemaster version signed is the SHA-256 of the provider file itself, which carries the list prices; a deployment would sign the chargemaster as a separate file. The record carries a contract version and dates that no public file holds, so the runs set them to one label and one date. The record covers fixed, percent-of-charges, and percent-of-reference rates and not the other contract terms listed in the Background; algorithm-only rows (\sheetAlgorithm{} here) and leased networks, where a third party stands between the provider and the plan, are outside it. The hospital rule covers hospitals, and the Transparency in Coverage rule does not cover Medicare Advantage or Medicaid managed care, so for those rates only one side publishes. A rate signature carries no deadline, so an abandoned draft that both parties signed can be committed by anyone while both keys are valid. The pair run covers one payer, five providers, and 16 codes, after a manual plan crosswalk and TIN-level pooling, and the provider files are dated between 2025-11-01 and 2026-11-03 against a payer file dated 2026-10-05, so part of the disagreement can be a rate update. A national reproduction first needs a parser for the JSON provider format and a way to handle payer files of 9 GB and more. The registry cannot detect a rate that both parties signed wrongly.
 
 \section*{Conclusion}
 
-A negotiated rate is a term that two parties agreed, and the public record of it should carry both signatures. CORAL gives a record format that both public files map to, a registry with a key hierarchy that judges validity at commit time and keeps one live record per key, and a verifier that checks a published line with one lookup. On one real provider file the format covers every row with a standard code and a value, the key holds for all but \sheetCollisions{} rows, and signing the sheet is a batch job of \sheetCommitMin{} minutes on one laptop. On five providers and one payer the files agree exactly on \pairExact\% of comparable pairs on the 16 codes that the 2026 study used, and the signed record turns each remaining difference into a finding about one file.
+On one real provider file the record format covers every row with a standard code and a value, the key holds for all but \sheetCollisions{} rows, and signing the sheet is a batch job of \sheetCommitMin{} minutes on one laptop. On five providers and one payer the files agree exactly on \pairExact\% of comparable pairs under the nearest-value pairing and \pairLineExact\% under the all-values pairing, on the 16 codes of the 2026 report; pairing on the full record key appears to remove much of the disagreement the report measures, which a comparison of both pairings on the same files would have to confirm. With a jointly signed record behind each rate, a verifier attributes a difference to the file that departs from the record, as the synthetic run shows on two copies of the signed values; no comparison of the two files can do that today.
 
 \begin{thebibliography}{99}
-\small
+\footnotesize\setlength{\parskip}{0pt}\setlength{\itemsep}{1pt}
 \bibitem{hpt} Centers for Medicare \& Medicaid Services. Medicare and Medicaid Programs: CY 2020 Hospital Outpatient PPS Policy Changes and Payment Rates and Ambulatory Surgical Center Payment System Policy Changes and Payment Rates. Price Transparency Requirements for Hospitals To Make Standard Charges Public. Final rule. Fed Regist. 2019 Nov 27;84(229):65524--65606. Codified at 45 CFR Part 180.
 \bibitem{tic} Internal Revenue Service, Employee Benefits Security Administration, Centers for Medicare \& Medicaid Services. Transparency in Coverage. Final rule. Fed Regist. 2020 Nov 12;85(219):72158--72310.
+\bibitem{opps2024} Centers for Medicare \& Medicaid Services. Medicare Program: Hospital Outpatient Prospective Payment and Ambulatory Surgical Center Payment Systems; Quality Reporting Programs; Hospital Price Transparency. Final rule with comment period. Fed Regist. 2023 Nov 22;88(224):81540. CMS-1786-FC.
+\bibitem{opps2026} Centers for Medicare \& Medicaid Services. Medicare Program: Hospital Outpatient Prospective Payment and Ambulatory Surgical Center Payment Systems (CY 2026). Final rule. Fed Regist. 2025 Nov 25;90:53448. CMS-1834-FC. Effective 2026 Jan 1.
+\bibitem{gag} Centers for Medicare \& Medicaid Services. Gag Clause Prohibition Compliance Attestation [Internet]. Baltimore (MD): CMS; 2024 Sep 19 [cited 2026 Nov 6]. Available from: https://www.cms.gov/marketplace/about/oversight/other-insurance-protections/gag-clause-prohibition-compliance-attestation
 \bibitem{trilliant} Patton K, Ikard M, Browne J, Oakes A. The majority of hospital and health plan reported rates diverge by more than 10\% [Internet]. Trilliant Health; 2026 Apr 30 [cited 2026 Nov 3]. Available from: https://www.trillianthealth.com/market-research/studies/the-majority-of-hospital-and-health-plan-reported-rates-diverge-by-more-than-10
 \bibitem{hptschema} Centers for Medicare \& Medicaid Services. Hospital price transparency CSV data dictionary, version 3.0 [Internet]. [cited 2026 Nov 3]. Available from: https://github.com/CMSgov/hospital-price-transparency/tree/master/documentation/CSV
 \bibitem{ticschema} Centers for Medicare \& Medicaid Services. Transparency in coverage: in-network rate file schema [Internet]. [cited 2026 Nov 3]. Available from: https://github.com/CMSgov/price-transparency-guide/tree/master/schemas/in-network-rates
+\bibitem{sinaiko2011} Sinaiko AD, Rosenthal MB. Increased price transparency in health care: challenges and potential effects. N Engl J Med. 2011;364(10):891--894. doi:10.1056/NEJMp1100041
+\bibitem{mehrotra2018} Mehrotra A, Chernew ME, Sinaiko AD. Promise and reality of price transparency. N Engl J Med. 2018;378(14):1348--1354. doi:10.1056/NEJMhpr1715229
+\bibitem{gondi2021} Gondi S, Beckman AL, Ofoje AA, Hinkes P, McWilliams JM. Early hospital compliance with federal requirements for price transparency. JAMA Intern Med. 2021;181(10):1396--1397. doi:10.1001/jamainternmed.2021.2531
 \bibitem{jiang2022} Jiang JX, Polsky D, Littlejohn J, Wang Y, Zare H, Bai G. Factors associated with compliance to the hospital price transparency final rule: a national landscape study. J Gen Intern Med. 2022;37(14):3577--3584. doi:10.1007/s11606-021-07237-y
 \bibitem{wang2023} Wang Y, Meiselbach M, Anderson GF, Bai G. Hospital pricing information consistent between Transparency-in-Coverage data and other commercial data sources. Health Aff Forefront. 2023 Nov 8. doi:10.1377/forefront.20231108.269718
 \bibitem{henderson2024} Henderson MA, Mouslim MC. Cross-validation of insurer and hospital price transparency data. Am J Manag Care. 2024;30(8):e247--e250. doi:10.37765/ajmc.2024.89594
 \bibitem{turquoise} Turquoise Health. 2025 price transparency impact report [Internet]. 2025 Oct 29 [cited 2026 Nov 3]. Available from: https://turquoise.health/resources/reports/2025-price-transparency-impact-report
 \bibitem{pra} PatientRightsAdvocate.org. Eighth hospital price transparency compliance report [Internet]. 2026 Sep [cited 2026 Nov 3]. Available from: https://www.patientrightsadvocate.org/eighth-annual-hospital-price-transparency-compliance-report-september-2026
-\bibitem{opps2024} Centers for Medicare \& Medicaid Services. Medicare Program: Hospital Outpatient Prospective Payment and Ambulatory Surgical Center Payment Systems; Quality Reporting Programs; Hospital Price Transparency. Final rule with comment period. Fed Regist. 2023 Nov 22;88(224):81540. CMS-1786-FC.
+\bibitem{nsa} Consolidated Appropriations Act, 2021. Pub L No. 116-260, Division BB, Title I, Sec. 111 (advanced explanation of benefits) and Sec. 112 (good faith estimate). 2020 Dec 27.
+\bibitem{pct} HL7 International, Financial Management Work Group. Da Vinci Patient Cost Transparency Implementation Guide, version 2.0.1 (STU 2) [Internet]. Ann Arbor (MI): HL7 International [cited 2026 Nov 6]. Available from: https://hl7.org/fhir/us/davinci-pct/
 \bibitem{kuo2017} Kuo TT, Kim HE, Ohno-Machado L. Blockchain distributed ledger technologies for biomedical and health care applications. J Am Med Inform Assoc. 2017;24(6):1211--1220. doi:10.1093/jamia/ocx068
 \bibitem{change2018} Change Healthcare. Change Healthcare announces general availability of first enterprise-scale blockchain solution for healthcare [press release on the Internet]. PR Newswire; 2018 Jan 8 [cited 2026 Nov 3]. Available from: https://www.prnewswire.com/news-releases/change-healthcare-announces-general-availability-of-first-enterprise-scale-blockchain-solution-for-healthcare-300578989.html
 \bibitem{synaptic} Kalina IM. Another big blockchain initiative announced in health care insurance industry [Internet]. National Law Review; 2019 Feb 6 [cited 2026 Nov 3]. Available from: https://natlawreview.com/article/another-big-blockchain-initiative-announced-health-care-insurance-industry
 \bibitem{procredex} Jasper KA. 5 healthcare groups sign up for blockchain credentialing [Internet]. Ledger Insights; 2018 Nov 9 [cited 2026 Nov 3]. Available from: https://www.ledgerinsights.com/healthcare-blockchain-credentialing-provider/
-\bibitem{ct} Laurie B. Certificate transparency. Commun ACM. 2014;57(10):40--46. doi:10.1145/2659897. Laurie B, Langley A, Kasper E. Certificate Transparency. RFC 6962. IETF; 2013 Jun.
+\bibitem{mistore2018} Zhou L, Wang L, Sun Y. MIStore: a blockchain-based medical insurance storage system. J Med Syst. 2018;42(8):149. doi:10.1007/s10916-018-0996-4
+\bibitem{ct} Laurie B. Certificate transparency. Commun ACM. 2014;57(10):40--46. doi:10.1145/2659897
+\bibitem{rfc6962} Laurie B, Langley A, Kasper E. Certificate Transparency. RFC 6962. Internet Engineering Task Force; 2013 Jun. doi:10.17487/RFC6962
+\bibitem{trillian} Google. Trillian: a transparent, highly scalable and cryptographically verifiable data store [software on the Internet]. [cited 2026 Nov 6]. Available from: https://github.com/google/trillian
 \bibitem{scitt} Birkholz H, Delignat-Lavaud A, Fournet C, Deshpande Y, Lasker S. An architecture for trustworthy and transparent digital supply chains. RFC 9943. IETF; 2026 Jun.
 \bibitem{peerreview} Haeberlen A, Kouznetsov P, Druschel P. PeerReview: practical accountability for distributed systems. In: Proceedings of the 21st ACM Symposium on Operating Systems Principles (SOSP); 2007 Oct; Stevenson, WA. p. 175--188. doi:10.1145/1294261.1294279
 \bibitem{sundr} Li J, Krohn M, Mazi\`eres D, Shasha D. Secure untrusted data repository (SUNDR). In: Proceedings of the 6th USENIX Symposium on Operating Systems Design and Implementation (OSDI); 2004 Dec; San Francisco. p. 121--136.
 \bibitem{zieglmeier2023} Zieglmeier V. Appending data to blockchain is not sufficient for non-repudiation of receipt. arXiv:2308.04781 [cs.CR]. 2023 Aug 9.
 \bibitem{eip712} Bloemen R, Logvinov L, Evans J. EIP-712: Typed structured data hashing and signing [Internet]. Ethereum Improvement Proposals; 2017 Sep 12 [cited 2026 Nov 3]. Available from: https://eips.ethereum.org/EIPS/eip-712
+\bibitem{hpid} Department of Health and Human Services. Administrative Simplification: Rescinding the Adoption of the Standard Unique Health Plan Identifier and Other Entity Identifier. Final rule. Fed Regist. 2019 Oct 28;84:57621. CMS-0054-F.
 \bibitem{besu} Hyperledger Besu. Configure IBFT 2.0 consensus [Internet]. [cited 2026 Nov 3]. Available from: https://besu.hyperledger.org/private-networks/how-to/configure/consensus/ibft
 \bibitem{repo} Srivastava A. CORAL: Committed Ratesheet on Ledger [source code on the Internet]. 2026 [cited 2026 Nov 3]. Available from: https://github.com/AbhinavMir/coral
 \end{thebibliography}

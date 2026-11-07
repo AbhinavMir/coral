@@ -1,0 +1,10 @@
+{
+  "file": "840398876_yampa-valley-medical-center_standardcharges.csv",
+  "lines": 467811,
+  "rows_with_value": 363690,
+  "percent_rows": 137218,
+  "amount_rows": 226472,
+  "keys": 262535,
+  "keys_with_several_values": 14292,
+  "rows_on_those_keys": 30636
+}
