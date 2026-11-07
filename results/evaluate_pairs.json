@@ -373,7 +373,7 @@
   "synthetic": {
     "keys": 28,
     "records_signed": 28,
-    "signed_this_run": 0,
+    "signed_this_run": 19,
     "truth": {
       "provider_altered": 4,
       "payer_altered": 3,

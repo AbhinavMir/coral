@@ -1,13 +1,13 @@
 {
-  "record_committed_at": 1793712830,
+  "record_committed_at": 1794044683,
   "backdated_revocation": "reverted (ContractCustomError: ('0x1532513f', '0x1532513f'))",
-  "revocation_effective": 1793712840,
-  "commit_with_old_key_after_revocation": "reverted (ContractCustomError: ('0x3b94fe240000000000000000000000003e1996c18254d1e11bdc00e6)",
+  "revocation_effective": 1794044693,
+  "commit_with_old_key_after_revocation": "reverted (ContractCustomError: ('0x3b94fe2400000000000000000000000052560b22837134e6e9d37f68)",
   "commit_with_new_key": "succeeded",
   "old_key_authorized_at_commit_time": true,
   "old_key_authorized_now": false,
   "activate_before_delay": "reverted (ContractCustomError: ('0xe90309b1', '0xe90309b1'))",
   "activate_after_veto": "reverted (ContractCustomError: ('0x2a01895e', '0x2a01895e'))",
-  "root_after": "0x0e5b8e1F4972F2de2c2734A86f045596B8e2AFee",
+  "root_after": "0xaC59774Cfffa38d49c77E91CcD685154fca20343",
   "root_unchanged": true
 }
