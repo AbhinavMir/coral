@@ -1,0 +1,63 @@
+{
+  "TIN:84-0398876": {
+    "pairs": 0,
+    "comparable": 0,
+    "exact_pct": 0.0,
+    "within_10_pct": 0.0,
+    "over_50_pct": 0.0,
+    "not_comparable": 0,
+    "attribution": {},
+    "provider_lines": 0
+  },
+  "TIN:46-0796114": {
+    "pairs": 131,
+    "comparable": 67,
+    "exact_pct": 16.4,
+    "within_10_pct": 26.9,
+    "over_50_pct": 56.7,
+    "not_comparable": 64,
+    "attribution": {},
+    "provider_lines": 25
+  },
+  "TIN:36-2169147": {
+    "pairs": 8,
+    "comparable": 8,
+    "exact_pct": 37.5,
+    "within_10_pct": 100.0,
+    "over_50_pct": 0.0,
+    "not_comparable": 0,
+    "attribution": {},
+    "provider_lines": 8
+  },
+  "TIN:93-1176109": {
+    "pairs": 84,
+    "comparable": 30,
+    "exact_pct": 0.0,
+    "within_10_pct": 100.0,
+    "over_50_pct": 0.0,
+    "not_comparable": 54,
+    "attribution": {},
+    "provider_lines": 46
+  },
+  "TIN:94-0562680": {
+    "pairs": 3,
+    "comparable": 1,
+    "exact_pct": 100.0,
+    "within_10_pct": 100.0,
+    "over_50_pct": 0.0,
+    "not_comparable": 2,
+    "attribution": {},
+    "provider_lines": 9
+  },
+  "all_providers": {
+    "pairs": 226,
+    "comparable": 106,
+    "exact_pct": 14.2,
+    "within_10_pct": 53.8,
+    "over_50_pct": 35.8,
+    "not_comparable": 120,
+    "attribution": {},
+    "exact_pct_of_all_pairs": 6.6,
+    "within_10_pct_of_all_pairs": 25.2
+  }
+}

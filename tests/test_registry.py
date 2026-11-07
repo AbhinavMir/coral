@@ -223,3 +223,44 @@ def test_verify_percent_of_charges(world):
     ln.gross_charge_cents = None
     assert verify_line(ch, ln, NOW).status == "needs_chargemaster"
     assert ch.chargemasters_for("TIN:84-0398876")[0]["version"] == "example chargemaster"
+
+
+def test_revocation_cannot_move_later(world):
+    ch, _, prov_root, ps, _, qs = world
+    t = ch.w3.eth.get_block("latest").timestamp
+    ch.revoke(prov_root.key, "TIN:84-0398876", ps.address, t + 30 * DAY)   # a planned future revocation
+    ch.revoke(prov_root.key, "TIN:84-0398876", ps.address, t + DAY)        # emergency: earlier is allowed
+    with pytest.raises(Exception):                                         # a replay of the later one is not
+        ch.revoke(prov_root.key, "TIN:84-0398876", ps.address, t + 30 * DAY)
+    travel(ch, t + DAY + 10)
+    with pytest.raises(Exception):
+        ch.commit_rate_with_keys(rate(), ps.key, qs.key)
+
+
+def test_supersede_of_ended_record_rejected(world):
+    ch, _, _, ps, _, qs = world
+    old = ch.commit_rate_with_keys(rate(start=NOW - 100 * DAY, end=NOW - 50 * DAY), ps.key, qs.key)
+    ch.commit_rate_with_keys(rate(value=120, start=NOW - 50 * DAY, end=NOW - 20 * DAY), ps.key, qs.key)
+    with pytest.raises(Exception):   # the old record is not live at the new start, so it cannot be superseded
+        ch.commit_rate_with_keys(rate(value=130, start=NOW - 10 * DAY, end=0, supersedes=old), ps.key, qs.key)
+    assert ch.get_rate(old).effective_end == NOW - 50 * DAY
+
+
+def test_root_cannot_be_delegated(world):
+    ch, _, prov_root, _, _, _ = world
+    with pytest.raises(Exception):
+        ch.delegate(prov_root.key, "TIN:84-0398876", prov_root.address, NOW - 1)
+    with pytest.raises(Exception):   # an empty window
+        ch.delegate(prov_root.key, "TIN:84-0398876", Account.create().address, NOW, NOW - 1)
+
+
+def test_veto_is_bound_to_one_proposal(world):
+    ch, registrar, prov_root, _, _, _ = world
+    new_root = Account.create()
+    ch.propose_root("TIN:84-0398876", new_root.address, registrar)
+    from coral.typed import sign_root_veto, b32
+    stale = sign_root_veto(prov_root.key, ch.domain, "TIN:84-0398876", new_root.address, 0)
+    with pytest.raises(Exception):   # a veto signed for another activation time does not apply
+        ch._send(ch.contract.functions.vetoRoot(b32("TIN:84-0398876"), stale))
+    ch.veto_root(prov_root.key, "TIN:84-0398876", new_root.address)
+    assert ch.entity("TIN:84-0398876")["root"] == prov_root.address

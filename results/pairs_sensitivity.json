@@ -1,0 +1,87 @@
+{
+  "base": {
+    "lines": 88,
+    "all_values": {
+      "pairs": 82,
+      "comparable": 50,
+      "exact_pct": 30.0,
+      "within_10_pct": 74.0,
+      "over_50_pct": 4.0,
+      "not_comparable": 32,
+      "attribution": {}
+    },
+    "nearest": {
+      "pairs": 52,
+      "comparable": 33,
+      "exact_pct": 45.5,
+      "within_10_pct": 97.0,
+      "over_50_pct": 0.0,
+      "not_comparable": 19,
+      "attribution": {}
+    },
+    "coarse": {
+      "pairs": 226,
+      "comparable": 106,
+      "exact_pct": 14.2,
+      "within_10_pct": 53.8,
+      "over_50_pct": 35.8,
+      "not_comparable": 120,
+      "attribution": {}
+    }
+  },
+  "b_with_asa": {
+    "lines": 100,
+    "all_values": {
+      "pairs": 106,
+      "comparable": 74,
+      "exact_pct": 20.3,
+      "within_10_pct": 50.0,
+      "over_50_pct": 18.9,
+      "not_comparable": 32,
+      "attribution": {}
+    },
+    "nearest": {
+      "pairs": 64,
+      "comparable": 45,
+      "exact_pct": 33.3,
+      "within_10_pct": 71.1,
+      "over_50_pct": 0.0,
+      "not_comparable": 19,
+      "attribution": {}
+    },
+    "coarse": {
+      "pairs": 334,
+      "comparable": 214,
+      "exact_pct": 7.0,
+      "within_10_pct": 26.6,
+      "over_50_pct": 62.6,
+      "not_comparable": 120,
+      "attribution": {}
+    }
+  },
+  "base_dedup": {
+    "lines": 83,
+    "all_values": {
+      "pairs": 73,
+      "comparable": 46,
+      "exact_pct": 28.3,
+      "within_10_pct": 76.1,
+      "over_50_pct": 4.3,
+      "not_comparable": 27,
+      "attribution": {}
+    },
+    "nearest": {
+      "pairs": 47,
+      "comparable": 31,
+      "exact_pct": 41.9,
+      "within_10_pct": 96.8,
+      "over_50_pct": 0.0,
+      "not_comparable": 16,
+      "attribution": {}
+    }
+  },
+  "within_5_cents": {
+    "all_values": 27,
+    "nearest": 27
+  }
+}

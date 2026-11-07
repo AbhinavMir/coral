@@ -118,7 +118,8 @@ class Chain:
         return self._send(self.contract.functions.activateRoot(b32(entity_id)))
 
     def veto_root(self, root_key, entity_id: str, new_root: str):
-        sig = sign_root_veto(root_key, self.domain, entity_id, new_root)
+        pending = self.contract.functions.pendingRoots(b32(entity_id)).call()
+        sig = sign_root_veto(root_key, self.domain, entity_id, new_root, pending[1])   # bound to this proposal
         return self._send(self.contract.functions.vetoRoot(b32(entity_id), sig))
 
     # ---- keys -------------------------------------------------------------

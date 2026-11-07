@@ -47,8 +47,18 @@ def main():
     prog = [ln.split() for ln in (R / "evaluate_sheet.log").read_text().splitlines() if "committed," in ln]
     early = [ln for ln in prog if ln[0].startswith("20000/")]
     out.append(cmd("sheetRecPerSEarly", early[0][2]))
-    dat = ["ledger rate\n"] + [f"{s['already_on_ledger'] + int(ln[0].split('/')[0])} {ln[2]}\n" for ln in prog]
+    # the log prints the cumulative average; the windowed rate over each 8-line span comes from the implied elapsed time
+    pts = [(int(ln[0].split("/")[0]), float(ln[2])) for ln in prog]
+    dat = ["ledger rate window\n"]
+    for i, (cnt, avg) in enumerate(pts):
+        win = "nan"
+        if i >= 8:
+            c0, a0 = pts[i - 8]
+            win = f"{(cnt - c0) / (cnt / avg - c0 / a0):.0f}"
+        dat.append(f"{s['already_on_ledger'] + cnt} {avg:.0f} {win}\n")
     (R / "commit_rate.dat").write_text("".join(dat))
+    late = [float(ln.split()[2]) for ln in dat[-9:]]
+    out.append(cmd("sheetRecPerSLate", n(round(sum(late) / len(late)))))
     out += [
         cmd("sheetAlready", n(s["already_on_ledger"])),
         cmd("sheetDiskBeforeGB", f"{s['validator_disk_bytes_before']/1e9:.2f}"),
@@ -83,6 +93,44 @@ def main():
         cmd("pairLineComparable", n(al["comparable"])), cmd("pairLineExact", al["exact_pct"]),
         cmd("pairLineAll", n(al["pairs"])), cmd("pairLineWithinTen", al["within_10_pct"]), cmd("pairLineOverFifty", al["over_50_pct"]),
         cmd("pairExactCount", round(a["exact_pct"] * a["comparable"] / 100)),
+    ]
+    # the same files paired on provider and code only (scripts/evaluate_pairs_coarse.py)
+    c = json.loads((R / "evaluate_pairs_coarse.json").read_text())["all_providers"]
+    out += [
+        cmd("coarsePairs", n(c["pairs"])), cmd("coarseComparable", n(c["comparable"])), cmd("coarseNotComparable", n(c["not_comparable"])),
+        cmd("coarseExact", c["exact_pct"]), cmd("coarseWithinTen", c["within_10_pct"]), cmd("coarseOverFifty", c["over_50_pct"]),
+        cmd("coarseExactCount", round(c["exact_pct"] * c["comparable"] / 100)),
+    ]
+    # sensitivity of the pair run (scripts/pairs_sensitivity.py) and Wilson 95% intervals
+    import math
+
+    def wilson(k, nn, z=1.96):
+        if not nn:
+            return "--"
+        ph = k / nn
+        d = 1 + z * z / nn
+        c0 = (ph + z * z / (2 * nn)) / d
+        h = z * math.sqrt(ph * (1 - ph) / nn + z * z / (4 * nn * nn)) / d
+        return f"{100*(c0-h):.0f}--{100*(c0+h):.0f}"
+
+    sv = json.loads((R / "pairs_sensitivity.json").read_text())
+    asa, dd, w5 = sv["b_with_asa"], sv["base_dedup"], sv["within_5_cents"]
+    out += [
+        cmd("sensAsaAllExact", asa["all_values"]["exact_pct"]), cmd("sensAsaAllWithin", asa["all_values"]["within_10_pct"]),
+        cmd("sensAsaAllOver", asa["all_values"]["over_50_pct"]), cmd("sensAsaAllComparable", n(asa["all_values"]["comparable"])),
+        cmd("sensAsaCoarseExact", asa["coarse"]["exact_pct"]), cmd("sensAsaCoarseOver", asa["coarse"]["over_50_pct"]),
+        cmd("sensAsaCoarseComparable", n(asa["coarse"]["comparable"])),
+        cmd("sensDedupAllExact", dd["all_values"]["exact_pct"]), cmd("sensDedupAllComparable", n(dd["all_values"]["comparable"])),
+        cmd("pairWithinFiveCents", n(w5["all_values"])),
+        cmd("pairLineExactCI", wilson(round(al["exact_pct"] * al["comparable"] / 100), al["comparable"])),
+        cmd("coarseExactCI", wilson(round(c["exact_pct"] * c["comparable"] / 100), c["comparable"])),
+    ]
+    # block period observed in the run, from the first and last progress lines; projected signing time for the sheet
+    blocks = int(prog[-1][-1]) - int(prog[0][-1])
+    out += [
+        cmd("sheetBlockS", f"{s['commit_s']/blocks:.1f}"),
+        cmd("sheetSignMinSheet", f"{s['sign_s']*s['records']/s['committed_this_run']/60:.1f}"),
+        cmd("sheetTotalMin", f"{(s['sign_s']*s['records']/s['committed_this_run'] + s['records']/s['records_per_s'])/60:.0f}"),
         cmd("pairLineExactCount", round(al["exact_pct"] * al["comparable"] / 100)),
     ]
     # the body letters the providers and does not name them; notes.tex keeps the mapping
@@ -92,14 +140,15 @@ def main():
     for tin, m in p["providers"].items():
         m = dict(m, name=short.get(tin, m["name"]))
         x = r[tin]
+        xl = x["lines"]
         rows.append(f"{m['name'].replace('&', chr(92) + '&')} & {m['dated']} & {m['codes_present']} & {x['provider_keys']} & {x['payer_keys_for_provider']} & "
-                    f"{x['pairs']} & {x['all']['comparable']} & {pct(x['all'], 'exact_pct')} & {pct(x['all'], 'within_10_pct')} & "
-                    f"{pct(x['all'], 'over_50_pct')} \\\\")
+                    f"{xl['pairs']} & {xl['comparable']} & {pct(xl, 'exact_pct')} & {pct(xl, 'within_10_pct')} & "
+                    f"{pct(xl, 'over_50_pct')} \\\\")
     out.append("\\newcommand{\\pairRows}{" + "\n".join(rows) + "}\n")
     # per-provider counts for the bar chart: exact, within 10% but not exact, beyond 10%, not comparable
     bars = ["provider exact within beyond notcomp\n"]
     for tin, m in p["providers"].items():
-        x, k = r[tin]["all"], r[tin]["all"]["comparable"]
+        x, k = r[tin]["lines"], r[tin]["lines"]["comparable"]
         ex, wi = round(x["exact_pct"] * k / 100), round(x["within_10_pct"] * k / 100)
         bars.append(f"{short[tin].split()[0]} {ex} {wi - ex} {k - wi} {x['not_comparable']}\n")
     (R / "pairs_bars.dat").write_text("".join(bars))

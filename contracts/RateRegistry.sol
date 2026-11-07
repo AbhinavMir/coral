@@ -90,7 +90,7 @@ contract RateRegistry {
         "Revocation(bytes32 entityId,address signer,uint64 effectiveFrom)"
     );
     bytes32 public constant ROOT_VETO_TYPEHASH = keccak256(
-        "RootVeto(bytes32 entityId,address newRoot)"
+        "RootVeto(bytes32 entityId,address newRoot,uint64 activatesAt)"
     );
     bytes32 public constant RATE_TYPEHASH = keccak256(
         "Rate(bytes32 payerId,bytes32 planId,bytes32 providerId,bytes32 npi,bytes32 code,bytes32 modifier_,uint8 setting,uint8 billingClass,bytes32 unit,uint8 formula,uint64 value,uint64 start,uint64 end,bytes32 contractVersion,bytes32 referenceVersion,bytes32 supersedes)"
@@ -147,6 +147,8 @@ contract RateRegistry {
     error OverlappingWindow(bytes32 existing);
     error BadWindow();
     error LengthMismatch();
+    error RevocationNotEarlier();
+    error RootCannotSign();
 
     constructor(address registrar_) {
         registrar = registrar_;
@@ -195,7 +197,7 @@ contract RateRegistry {
     function vetoRoot(bytes32 entityId, bytes calldata rootSig) external {
         PendingRoot memory p = pendingRoots[entityId];
         if (p.newRoot == address(0)) revert NoPendingRoot();
-        bytes32 structHash = keccak256(abi.encode(ROOT_VETO_TYPEHASH, entityId, p.newRoot));
+        bytes32 structHash = keccak256(abi.encode(ROOT_VETO_TYPEHASH, entityId, p.newRoot, p.activatesAt));
         if (_recover(structHash, rootSig) != entities[entityId].root) revert BadSignature();
         delete pendingRoots[entityId];
         emit RootVetoed(entityId, p.newRoot);
@@ -209,6 +211,8 @@ contract RateRegistry {
         Entity memory e = entities[entityId];
         if (e.kind == Kind.None) revert UnknownEntity();
         if (delegations[signer].entityId != bytes32(0)) revert DelegationExists();
+        if (signer == e.root) revert RootCannotSign();
+        if (notAfter != 0 && notAfter <= notBefore) revert BadWindow();
         bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, entityId, signer, notBefore, notAfter));
         if (_recover(structHash, rootSig) != e.root) revert BadSignature();
         delegations[signer] = Delegation(entityId, notBefore, notAfter, 0);
@@ -217,6 +221,8 @@ contract RateRegistry {
 
     /// A revocation takes effect at or after the block in which it is committed.
     /// A root cannot backdate a revocation to before a record its key signed.
+    /// A second revocation can only move the time earlier, so a signed
+    /// revocation for a later time cannot be replayed to reopen the key.
     function revoke(bytes32 entityId, address signer, uint64 effectiveFrom, bytes calldata rootSig) external {
         Entity memory e = entities[entityId];
         if (e.kind == Kind.None) revert UnknownEntity();
@@ -225,6 +231,7 @@ contract RateRegistry {
         if (d.entityId != entityId) revert SignerNotAuthorized(signer);
         bytes32 structHash = keccak256(abi.encode(REVOCATION_TYPEHASH, entityId, signer, effectiveFrom));
         if (_recover(structHash, rootSig) != e.root) revert BadSignature();
+        if (d.revokedFrom != 0 && effectiveFrom >= d.revokedFrom) revert RevocationNotEarlier();
         d.revokedFrom = effectiveFrom;
         emit SignerRevoked(entityId, signer, effectiveFrom);
     }
@@ -315,6 +322,8 @@ contract RateRegistry {
         if (rateKeyOf(old) != k) revert WrongKey();
         if (c.supersededBy != bytes32(0)) revert AlreadySuperseded();
         if (r.start < rateBodies[old].start) revert BadWindow();
+        uint64 oldEnd = rateBodies[old].end;
+        if (oldEnd != 0 && r.start >= oldEnd) revert BadWindow();   // the old record is not live at the new start
         c.supersededBy = id;
         c.supersededAt = r.start;
         emit RateSuperseded(old, id, r.start);

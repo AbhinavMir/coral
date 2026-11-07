@@ -33,6 +33,7 @@ TYPES = {
     "RootVeto": [
         {"name": "entityId", "type": "bytes32"},
         {"name": "newRoot", "type": "address"},
+        {"name": "activatesAt", "type": "uint64"},
     ],
     "Rate": [
         {"name": "payerId", "type": "bytes32"},
@@ -173,8 +174,9 @@ def sign_revocation(root_key, dom, entity_id: str, signer: str, effective_from: 
     })
 
 
-def sign_root_veto(root_key, dom, entity_id: str, new_root: str) -> bytes:
-    return sign(root_key, dom, "RootVeto", {"entityId": b32(entity_id), "newRoot": to_checksum_address(new_root)})
+def sign_root_veto(root_key, dom, entity_id: str, new_root: str, activates_at: int) -> bytes:
+    return sign(root_key, dom, "RootVeto", {"entityId": b32(entity_id), "newRoot": to_checksum_address(new_root),
+                                            "activatesAt": activates_at})
 
 
 def sign_rate(key, dom, rate: Rate) -> bytes:

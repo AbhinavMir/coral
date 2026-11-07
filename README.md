@@ -11,16 +11,16 @@ notes in `notes.tex`, run numbers in `numbers.tex` written by `scripts/make_numb
 
 | Part | State |
 |---|---|
-| Contract `contracts/RateRegistry.sol` | done; 16 tests pass; revocation bound to block time, root delay and veto, supersedes, overlap rejection, batch commit |
+| Contract `contracts/RateRegistry.sol` | done; 20 tests pass; revocation bound to block time and monotone (no replay), root delay and veto bound to one proposal, supersedes (not of an ended record), overlap rejection, root cannot sign, batch commit |
 | Besu IBFT 2.0 network, 4 validators | done; `besu/docker-compose.yml` |
 | Python client, EIP-712 signing | done; `coral/` |
 | Provider MRF parser | done; unit and billing class in the key; run on five real files |
 | Payer TiC parser | done; run on one real Aetna file (1.69 GB gz) |
 | Web app: provider/payer and CMS views | done; `app/` |
 | Full-sheet run (one provider, 20 payers) | done; `results/evaluate_sheet.json`: 262,535 records, 61 records/s, verify 363,690 lines in 1.3 s |
-| Five providers vs Aetna on 16 codes, synthetic attribution | done; `results/evaluate_pairs.json`: 52 pairs, 33 comparable, 45.5% exact |
+| Five providers vs Aetna on 16 codes, synthetic attribution | done; `results/evaluate_pairs.json`: record key 82 pairs, 50 comparable, 30.0% exact (all values; 45.5% nearest value); provider-and-code pairing `results/evaluate_pairs_coarse.json`: 226 pairs, 106 comparable, 14.2% exact; sensitivities in `results/pairs_sensitivity.json` |
 | Key lifecycle on the network | done; `results/key_events.json` |
-| Paper | revised after a five-reviewer round on 2026-11-06; body with references 10 pages, 8 figures, 3 tables, 34 references, notes appended; numbers from `numbers.tex` |
+| Paper | revised after two five-reviewer rounds on 2026-11-06; body with references 10 pages, 7 figures, 3 tables, 38 references, notes appended; numbers from `numbers.tex` |
 
 ## Run
 
@@ -42,6 +42,8 @@ Evaluation:
 .venv/bin/python scripts/evaluate_pairs.py data/raw/tic/<aetna in-network>.json.gz
 .venv/bin/python scripts/key_events.py           # rotates the Aetna signing key in build/keys.json
 .venv/bin/python scripts/sheet_stats.py data/raw/<provider>_standardcharges.csv TIN:84-0398876   # keys with several values, repeat rows
+.venv/bin/python scripts/evaluate_pairs_coarse.py   # the same files paired on provider and code only (the report's pairing)
+.venv/bin/python scripts/pairs_sensitivity.py       # crosswalk, repeat-line, and cent-precision sensitivities
 .venv/bin/python scripts/make_numbers.py && pdflatex abstract.tex && pdflatex abstract.tex
 ```
 
@@ -60,6 +62,8 @@ app/                         FastAPI server and static pages
 besu/                        genesis, validator keys, docker-compose
 scripts/bootstrap.py         deploy and register demo entities
 scripts/sheet_stats.py       row distribution of the full-sheet file -> results/sheet_stats.json
+scripts/evaluate_pairs_coarse.py  provider-and-code-only pairing -> results/evaluate_pairs_coarse.json
+scripts/pairs_sensitivity.py  pair-run sensitivities -> results/pairs_sensitivity.json
 scripts/seed_examples.py     sign the ten example rates and the chargemaster hash
 scripts/evaluate_sheet.py    sign a whole provider sheet; cost; verify clean and altered copies (--skip-commit: verify only)
 scripts/evaluate_pairs.py    five providers vs one payer file on the 16 Trilliant codes; synthetic attribution
