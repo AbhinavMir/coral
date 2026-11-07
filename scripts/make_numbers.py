@@ -57,8 +57,10 @@ def main():
             win = f"{(cnt - c0) / (cnt / avg - c0 / a0):.0f}"
         dat.append(f"{s['already_on_ledger'] + cnt} {avg:.0f} {win}\n")
     (R / "commit_rate.dat").write_text("".join(dat))
-    late = [float(ln.split()[2]) for ln in dat[-9:]]
-    out.append(cmd("sheetRecPerSLate", n(round(sum(late) / len(late)))))
+    # rate over the last 50,000 records of the run, from the implied elapsed times of the cumulative averages
+    (c1, a1) = pts[-1]
+    (c0, a0) = next((c, a) for c, a in pts if c >= c1 - 50000)
+    out.append(cmd("sheetRecPerSLate", n(round((c1 - c0) / (c1 / a1 - c0 / a0)))))
     out += [
         cmd("sheetAlready", n(s["already_on_ledger"])),
         cmd("sheetDiskBeforeGB", f"{s['validator_disk_bytes_before']/1e9:.2f}"),
